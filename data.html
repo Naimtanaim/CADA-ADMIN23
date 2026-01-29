@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>出貨課包裝條碼（Bulk Edit Full）</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 13px; margin:0; padding:10px; background:#f9f9f9; }
+    h3 { margin-bottom:10px; }
+
+    /* Toolbar */
+    .toolbar { margin-bottom:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .toolbar input { padding:5px; width:150px; border:1px solid #ccc; border-radius:4px; }
+    .toolbar button { padding:6px 14px; font-size:13px; border:none; border-radius:6px; cursor:pointer; color:white; transition:0.15s; }
+    #btnSearch { background:#1976d2; } #btnSearch:hover { background:#0d47a1; }
+    #btnDeleteSelected { background:#e53935; } #btnDeleteSelected:hover { background:#b71c1c; }
+    #btnEditSelected { background:#ffa726; color:#1b1b1b; } #btnEditSelected:hover { background:#fb8c00; }
+
+    /* Pagination */
+    .pagination { margin-bottom:12px; display:flex; gap:8px; align-items:center; }
+    .pagination button { padding:6px 14px; border-radius:6px; background:#00897b; color:white; border:none; cursor:pointer; }
+    .pagination button:disabled { background:#bdbdbd; cursor:not-allowed; }
+
+    /* Table container */
+    .table-container { max-height:480px; overflow-y:auto; border-radius:6px; background:white; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { border:1px solid #e0e0e0; padding:6px 8px; text-align:center; }
+    th { background:#eeeeee; font-weight:bold; position:sticky; top:0; z-index:5; }
+    tr:nth-child(even) { background:#fafafa; }
+
+    /* Modal */
+    #bulkModal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); z-index:9999; }
+    .modal-card { background:#fff; border-radius:10px; width:720px; max-width:96%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .modal-header h4 { margin:0; }
+    .modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px; }
+    .modal-grid label { display:block; font-size:12px; margin-bottom:4px; color:#333; }
+    .modal-grid input { width:100%; padding:7px; border:1px solid #ccc; border-radius:6px; font-size:13px; }
+    .modal-actions { margin-top:12px; display:flex; gap:8px; justify-content:flex-end; }
+    .btn-primary { background:#1976d2; color:white; padding:8px 14px; border-radius:6px; border:none; cursor:pointer; }
+    .btn-cancel { background:#bdbdbd; color:#111; padding:8px 14px; border-radius:6px; border:none; cursor:pointer; }
+    .small-note { font-size:12px; color:#666; margin-top:6px; }
+    #btnAdd { background:#43a047; color:white; padding:6px 14px; border:none; border-radius:6px; cursor:pointer; }
+#btnAdd:hover { background:#2e7d32; }
+
+#btnUpload { background:#6a1b9a; color:white; padding:6px 14px; border:none; border-radius:6px; cursor:pointer; }
+#btnUpload:hover { background:#4a148c; }
+
+    @media (max-width:720px){ .modal-grid{grid-template-columns:1fr;} .toolbar input{width:120px;} table{font-size:11px;} }
+  </style>
+</head>
+<body>
+
+<h3>出貨課條碼查詢（DATA BASE）</h3>
+
+<div class="toolbar">
+  包裝機板: <input type="text" id="filter_packaging_board" />
+  客戶: <input type="text" id="filter_customer" />
+  公司號: <input type="text" id="filter_company_number" />
+  備料單號: <input type="text" id="filter_material_order_number" />
+  <button id="btnSearch">查詢</button>
+  <button id="btnEditSelected">編輯選取</button>
+  <button id="btnDeleteSelected">刪除選取</button>
+  <button id="btnAdd" onclick="window.location.href='input.html'">新增出貨資料</button>
+<a href="import.html"><button id="btnUpload">Upload CSV</button></a>
+
+</div>
+
+<div class="pagination">
+  <button id="btnPrev">上一頁</button>
+  <button id="btnNext">下一頁</button>
+  <span id="paginationInfo">第 1 頁 / 1</span>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th><input id="selectAllChk" type="checkbox" title="全選/取消全選" /></th>
+        <th>包裝機板</th>
+        <th>箱號</th>
+        <th>備料單號</th>
+        <th>原始備料單號</th>
+        <th>公司號</th>
+        <th>包裝數量</th>
+        <th>客戶</th>
+        <th>客戶訂單號</th>
+        <th>送貨訂單號</th>
+        <th>打包時間</th>
+        <th>打包人員</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<!-- BULK EDIT MODAL -->
+<div id="bulkModal" role="dialog" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h4>批次編輯選取資料</h4>
+      <div><span id="bulkCount">0</span> 筆已選</div>
+    </div>
+    <div class="small-note">若欄位留空或顯示 "(多筆不同)" 並不修改該欄位，否則會套用輸入值到所有選取資料。</div>
+    <div class="modal-grid" style="margin-top:10px;">
+      <div><label>箱號 (box_number)</label><input id="m_box_number" type="text"></div>
+      <div><label>備料單號 (material_order_number)</label><input id="m_material_order_number" type="text"></div>
+      <div><label>原始備料單號 (original_material_order_number)</label><input id="m_original_material_order_number" type="text"></div>
+      <div><label>公司號 (company_number)</label><input id="m_company_number" type="text"></div>
+      <div><label>包裝數量 (packaging_quantity)</label><input id="m_packaging_quantity" type="number" min="0"></div>
+      <div><label>客戶 (customer)</label><input id="m_customer" type="text"></div>
+      <div><label>客戶訂單號 (customer_order_number)</label><input id="m_customer_order_number" type="text"></div>
+      <div><label>送貨訂單號 (delivery_order_number)</label><input id="m_delivery_order_number" type="text"></div>
+      <div><label>打包時間 (packaging_time)</label><input id="m_packaging_time" type="datetime-local"></div>
+      <div><label>打包人員 (packer)</label><input id="m_packer" type="text"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeBulkModal()">取消</button>
+      <button class="btn-primary" id="bulkSaveBtn">儲存變更</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://uusljhegkvahcjkaxqkz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g";
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentPage = 1;
+const pageSize = 20;
+
+// Fetch data
+async function fetchShipments(page = 1){
+  currentPage = page;
+  const filters = {
+    packaging_board: document.getElementById('filter_packaging_board').value,
+    customer: document.getElementById('filter_customer').value,
+    company_number: document.getElementById('filter_company_number').value,
+    material_order_number: document.getElementById('filter_material_order_number').value
+  };
+  let query = supabaseClient.from("data").select("*", {count:"exact"});
+  if(filters.packaging_board) query = query.ilike("packaging_board", `%${filters.packaging_board}%`);
+  if(filters.customer) query = query.ilike("customer", `%${filters.customer}%`);
+  if(filters.company_number) query = query.ilike("company_number", `%${filters.company_number}%`);
+  if(filters.material_order_number) query = query.ilike("material_order_number", `%${filters.material_order_number}%`);
+  const from = (page-1)*pageSize, to = from+pageSize-1;
+  const {data, count, error} = await query.order("id",{ascending:false}).range(from,to);
+  if(error){ alert("查詢錯誤: "+error.message); return; }
+  renderTable(data);
+  updatePagination(count);
+}
+
+// Render table
+function renderTable(data){
+  const tbody = document.getElementById("tableBody"); tbody.innerHTML="";
+  if(!data || data.length===0){ tbody.innerHTML='<tr><td colspan="12">無資料顯示</td></tr>'; return; }
+  data.forEach(item=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td><input class="row-chk" type="checkbox" data-id="${item.id}"></td>
+      <td>${escapeHtml(item.packaging_board||"")}</td>
+      <td>${escapeHtml(item.box_number||"")}</td>
+      <td>${escapeHtml(item.material_order_number||"")}</td>
+      <td>${escapeHtml(item.original_material_order_number||"")}</td>
+      <td>${escapeHtml(item.company_number||"")}</td>
+      <td>${escapeHtml(item.packaging_quantity!=null?item.packaging_quantity:"")}</td>
+      <td>${escapeHtml(item.customer||"")}</td>
+      <td>${escapeHtml(item.customer_order_number||"")}</td>
+      <td>${escapeHtml(item.delivery_order_number||"")}</td>
+      <td>${item.packaging_time?new Date(item.packaging_time).toLocaleString("zh-TW",{hour12:false}):""}</td>
+      <td>${escapeHtml(item.packer||"")}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  // select-all
+  const selectAll=document.getElementById("selectAllChk");
+  const rowChecks=document.querySelectorAll(".row-chk");
+  function updateSelectAll(){ const total=rowChecks.length; const checked=Array.from(rowChecks).filter(c=>c.checked).length; selectAll.checked=checked===total&&total>0; selectAll.indeterminate=checked>0&&checked<total; }
+  rowChecks.forEach(chk=>chk.addEventListener("change",updateSelectAll));
+  selectAll.checked=false; selectAll.indeterminate=false;
+  selectAll.addEventListener("change",()=>{rowChecks.forEach(c=>c.checked=selectAll.checked);});
+}
+
+function escapeHtml(str){return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
+function updatePagination(totalRows){const totalPages=Math.max(1,Math.ceil(totalRows/pageSize));document.getElementById("paginationInfo").innerText=`第 ${currentPage} 頁 / 共 ${totalPages} 頁`;document.getElementById("btnPrev").disabled=(currentPage===1);document.getElementById("btnNext").disabled=(currentPage>=totalPages);}
+
+// Delete
+async function deleteSelectedRows(){
+  const checked=document.querySelectorAll('tbody .row-chk:checked'); const deleteIds=Array.from(checked).map(cb=>cb.dataset.id);
+  if(deleteIds.length===0) return alert("請選擇要刪除的資料"); if(!confirm(`確定刪除 ${deleteIds.length} 筆資料？`)) return;
+  const {error}=await supabaseClient.from("data").delete().in("id",deleteIds);
+  if(error) return alert("刪除錯誤: "+error.message); fetchShipments(currentPage);
+}
+
+// Bulk edit modal
+async function openBulkModal() {
+  const checked = document.querySelectorAll('tbody .row-chk:checked');
+  if (checked.length === 0) return alert("請先勾選至少 1 筆資料");
+
+  const ids = Array.from(checked).map(c => c.dataset.id);
+  document.getElementById("bulkCount").innerText = ids.length;
+
+  // ======= FETCH DATA ASLI DARI SUPABASE =======
+  const { data, error } = await supabaseClient
+    .from("data")
+    .select("*")
+    .in("id", ids);
+
+  if (error) {
+    alert("讀取資料錯誤: " + error.message);
+    return;
+  }
+
+  const fields = [
+    "box_number",
+    "material_order_number",
+    "original_material_order_number",
+    "company_number",
+    "packaging_quantity",
+    "customer",
+    "customer_order_number",
+    "delivery_order_number",
+    "packaging_time",
+    "packer"
+  ];
+
+  // ======= MASUKKAN DATA ASLI KE FORM =======
+  fields.forEach(f => {
+    const input = document.getElementById("m_" + f);
+
+    let values = data.map(row => row[f] ?? "");
+    const unique = [...new Set(values)];
+
+    if (unique.length === 1) {
+      // Semua nilai sama → tampilkan
+      if (f === "packaging_time" && unique[0]) {
+        input.value = new Date(unique[0]).toISOString().slice(0, 16);
+      } else {
+        input.value = unique[0];
+      }
+      input.placeholder = "";
+    } else {
+      // Jika beda-beda → kosong + placeholder
+      input.value = "";
+      input.placeholder = "(多筆不同)";
+    }
+  });
+
+  // Tampilkan modal
+  document.getElementById("bulkModal").style.display = "flex";
+  document.getElementById("bulkModal").setAttribute("aria-hidden", "false");
+}
+
+async function saveBulkChanges(){
+  const checked=document.querySelectorAll('tbody .row-chk:checked'); if(checked.length===0) return alert("請先勾選至少 1 筆資料");
+  const ids=Array.from(checked).map(cb=>cb.dataset.id);
+
+  const updates={};
+  const mapping=["box_number","material_order_number","original_material_order_number","company_number","packaging_quantity","customer","customer_order_number","delivery_order_number","packaging_time","packer"];
+  mapping.forEach(f=>{
+    const el=document.getElementById("m_"+f);
+    if(el.value.trim()!=="") updates[f]=f==="packaging_quantity"?Number(el.value):f==="packaging_time"?new Date(el.value).toISOString():el.value.trim();
+  });
+
+  if(Object.keys(updates).length===0) return alert("請輸入至少一個欄位修改值");
+  if(!confirm(`確定要將 ${Object.keys(updates).length} 個欄位更新到 ${ids.length} 筆資料嗎？`)) return;
+
+  const {error}=await supabaseClient.from("data").update(updates).in("id",ids);
+  if(error){ alert("更新錯誤: "+error.message); return; }
+  alert("更新成功！");
+  closeBulkModal(); fetchShipments(currentPage);
+}
+
+// Events
+document.getElementById("btnSearch").addEventListener("click",()=>fetchShipments(1));
+document.getElementById("btnDeleteSelected").addEventListener("click",deleteSelectedRows);
+document.getElementById("btnEditSelected").addEventListener("click",openBulkModal);
+document.getElementById("btnPrev").addEventListener("click",()=>fetchShipments(currentPage-1));
+document.getElementById("btnNext").addEventListener("click",()=>fetchShipments(currentPage+1));
+document.getElementById("bulkSaveBtn").addEventListener("click",saveBulkChanges);
+
+document.getElementById("selectAllChk").addEventListener("change",function(){const checked=this.checked; document.querySelectorAll(".row-chk").forEach(c=>c.checked=checked);});
+
+// Initial fetch
+fetchShipments(1);
+</script>
+</body>
+</html>

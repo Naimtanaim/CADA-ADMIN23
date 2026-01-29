@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Import Excel ke PLT Table</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f7fa; }
+  h2 { text-align: center; margin-bottom: 20px; }
+  input, button { padding: 10px; margin: 10px 0; }
+  button { cursor: pointer; background: #007BFF; color: white; border: none; border-radius: 5px; }
+  button:hover { background: #0056b3; }
+  #log { margin-top: 20px; white-space: pre-wrap; background: #fff; padding: 10px; border-radius: 6px; }
+  /* Style tombol modern */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    position:absolute; top:20px; right:20px;
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 20px rgba(0,0,0,0.3);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 10px rgba(0,0,0,0.2);
+  }
+</style>
+</head>
+<body>
+
+<h2>Import Data Excel</h2>
+<a href="149.html" class="btn">Kembali </a>
+
+<input type="file" id="excelFile" accept=".xlsx,.xls">
+<br>
+<button id="uploadBtn">Upload & Simpan ke Supabase</button>
+<button id="refreshBtn" style="background:#28a745;">🔄 Refresh (Clear Data)</button>
+
+<pre id="log"></pre>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+// Konfigurasi Supabase
+const SUPABASE_URL = "https://uusljhegkvahcjkaxqkz.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+document.getElementById("uploadBtn").addEventListener("click", () => {
+  const fileInput = document.getElementById("excelFile");
+  if (!fileInput.files.length) return alert("⚠️ Pilih file Excel terlebih dahulu!");
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+
+  reader.onload = async function(e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+
+    const firstSheet = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheet];
+
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+    const formattedData = jsonData.map((row, index) => {
+      const volume = row["材積: (長*寬*高)/28317"] 
+                     ? parseFloat(row["材積: (長*寬*高)/28317"]) 
+                     : row["長*寬*高"] ? parseFloat(row["長*寬*高"]) / 28317 : 0;
+
+      const cbm = row["CBM:材積/35.315"] 
+                  ? parseFloat(row["CBM:材積/35.315"]) 
+                  : volume / 35.315;
+
+      return {
+        NO: row["NO"] || index + 1,
+        SIZE: row["SIZE"] || "",
+        "長*寬*高": row["長*寬*高"] || "",
+        材積: volume,
+        CBM: cbm,
+        箱數: row["箱數"] ? parseInt(row["箱數"]) : 0,
+        重量: row["重量"] ? parseFloat(row["重量"]) : 0
+      };
+    });
+
+    document.getElementById("log").innerText =
+      "📊 Data siap upload:\n" + JSON.stringify(formattedData, null, 2);
+
+    const { error } = await supabase
+      .from("plt_table")
+      .insert(formattedData);
+
+    if (error) {
+      alert("❌ Gagal menyimpan data: " + error.message);
+      document.getElementById("log").innerText += "\n\n❌ Error:\n" + error.message;
+    } else {
+      alert("✅ Data berhasil diunggah ke Supabase!");
+      document.getElementById("log").innerText += "\n\n✅ Berhasil upload!";
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+});
+
+// Tombol Refresh (hapus semua data di plt_table)
+document.getElementById("refreshBtn").addEventListener("click", async () => {
+  if (!confirm("⚠️ Yakin ingin menghapus semua data di plt_table?")) return;
+  const { error } = await supabase.from("plt_table").delete().neq("NO", 0);
+  if (error) {
+    alert("❌ Gagal hapus data: " + error.message);
+  } else {
+    alert("✅ Semua data berhasil dihapus dari plt_table!");
+    document.getElementById("log").innerText = "🗑️ Semua data sudah dihapus.";
+  }
+});
+</script>
+
+</body>
+</html>

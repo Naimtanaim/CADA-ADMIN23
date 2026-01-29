@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>資料輸入表單 - Data Input Form</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+
+    form {
+      background: #fff;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    label {
+      display: block;
+      margin-top: 15px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>📦 資料輸入表單 - Input Barang</h2>
+  <form id="dataForm">
+    <label>包裝機板 (Packaging Board)
+      <input type="text" name="packaging_board" required>
+    </label>
+    <label>箱號 (Box Number)
+      <input type="text" name="box_number" required>
+    </label>
+    <label>備料單號 (Material Order Number)
+      <input type="text" name="material_order_number" required>
+    </label>
+    <label>原始備料單號 (Original Material Order Number)
+      <input type="text" name="original_material_order_number">
+    </label>
+    <label>公司號 (Company Number)
+      <input type="text" name="company_number">
+    </label>
+    <label>包裝數量 (Packaging Quantity)
+      <input type="number" name="packaging_quantity" required>
+    </label>
+    <label>客戶 (Customer)
+      <input type="text" name="customer" required>
+    </label>
+    <label>客戶訂單號 (Customer Order Number)
+      <input type="text" name="customer_order_number">
+    </label>
+    <label>送貨訂單號 (Delivery Order Number)
+      <input type="text" name="delivery_order_number">
+    </label>
+    <label>打包時間 (Packaging Time)
+      <input type="datetime-local" name="packaging_time" required>
+    </label>
+    <label>打包人員 (Packer)
+      <input type="text" name="packer" required>
+    </label>
+    <button type="submit">送出資料 (Submit)</button>
+  </form>
+
+  <script>
+    const supabase = window.supabase.createClient(
+      "https://uusljhegkvahcjkaxqkz.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g"
+    );
+
+    document.getElementById("dataForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      const form = e.target;
+      const data = {
+        packaging_board: form.packaging_board.value,
+        box_number: form.box_number.value,
+        material_order_number: form.material_order_number.value,
+        original_material_order_number: form.original_material_order_number.value,
+        company_number: form.company_number.value,
+        packaging_quantity: Number(form.packaging_quantity.value),
+        customer: form.customer.value,
+        customer_order_number: form.customer_order_number.value,
+        delivery_order_number: form.delivery_order_number.value,
+        packaging_time: new Date(form.packaging_time.value).toISOString(),
+        packer: form.packer.value
+      };
+
+      const { error } = await supabase.from("databarang").insert(data);
+
+      if (error) {
+        alert("❌ 發生錯誤: " + error.message);
+      } else {
+        alert("✅ 資料已成功儲存！");
+        form.reset();
+      }
+    });
+  </script>
+</body>
+</html>

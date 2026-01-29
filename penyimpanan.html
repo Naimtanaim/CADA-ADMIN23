@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penyimpanan Barang Otomatis</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f6f9;
+  margin: 0;
+  padding: 30px;
+}
+.container {
+  max-width: 1200px;
+  margin: auto;
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+h2 {
+  text-align: center;
+  color: #007bff;
+  margin: 0;
+  flex-grow: 1;
+}
+button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.print-btn { background: #28a745; color: white; font-weight: bold; }
+.print-btn:hover { background: #218838; }
+.delete-btn { background: #dc3545; color: white; font-weight: bold; }
+.delete-btn:hover { background: #b02a37; }
+.row { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+label { font-weight: bold; }
+input[type=text] {
+  padding: 8px;
+  font-size: 16px;
+  width: 200px;
+}
+.total-box {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+  background: #e3f2fd;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: inline-block;
+  color: #007bff;
+}
+.table-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  margin-top: 15px;
+}
+table { width: 100%; border-collapse: collapse; }
+th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+th {
+  background: #007bff;
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.notification {
+  position: fixed;
+  top: 58%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #f44336;
+  color: white;
+
+  border-radius: 20px;
+  box-shadow: 0 12px 35px rgba(0,0,0,0.35);
+
+  padding: 35px 55px;
+  z-index: 9999;
+  display: none;
+
+  font-size: 30px;        /* lebih besar */
+  font-weight: bold;
+  text-align: center;
+  letter-spacing: 1px;
+
+  animation: fadeIn 0.25s ease-out;
+}
+
+.notification.show { display: block; }
+.notification.error { background: #e63946; }
+.notification.warning { background: #ff9800; }
+.notification.success { background: #4caf50; }
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translate(-50%, -60%); }
+  100% { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  #printArea, #printArea * { visibility: visible; }
+  #printArea {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%;
+    text-align: center;
+  }
+}
+#printArea {
+  display: none;
+  width: 700px;
+  padding: 15px;
+  background: #fff8e7;
+  border: 2px dashed #f4a261;
+  border-radius: 15px;
+  box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+  font-family: 'Arial', sans-serif;
+  text-align: center;
+  margin: 10px auto;
+}
+#printArea h3 {
+  margin: 5px 0;
+  color: #e76f51;
+  font-size: 1.2em;
+}
+#printArea svg {
+  margin: 10px 0;
+  background: #fefae0;
+  padding: 10px;
+  border-radius: 10px;
+}
+#printArea p {
+  margin: 5px 0;
+}
+#printArea #placeText { font-weight: bold; font-size: 1em; color: #264653; }
+#printArea #packerText { font-size: 0.9em; color: #2a9d8f; }
+#printArea #dateText { font-size: 0.8em; color: #6c757d; }
+
+/* additional small styles */
+.row-check:checked ~ tr { background: #f1f8e9; }
+.new-row-highlight {
+  animation: highlightFlash 1s ease;
+}
+@keyframes highlightFlash {
+  0% { background: #fffbe6; }
+  50% { background: #e6ffed; }
+  100% { background: transparent; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <h2>📦 Gudang Penyimpanan 存放位置</h2>
+    <div style="display:flex;gap:10px;">
+      <button onclick="window.location.href='rak.html'">列印</button>
+      <button class="delete-btn" onclick="hapusTerpilih()">Hapus Terpilih</button>
+    </div>
+  </div>
+  
+  <div class="row">
+    <label>打包人員 :</label>
+    <input type="text" id="packerCodeInput" placeholder="">
+    <span id="packerName" style="font-weight:bold;color:#ff9800;"></span>
+  </div>
+  
+  <div class="row">
+    <label>Tempat 存放位置:</label>
+    <input type="text" id="placeInput" placeholder="" disabled style="text-transform:uppercase;">
+  </div>
+
+  <div class="row">
+    <label>Barcode:</label>
+    <input type="text" id="barcodeInput" placeholder="" disabled>
+  </div>
+
+  <div class="total-box">Total Box 总箱数: <span id="totalCount">0</span></div>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="checkAll"></th>
+          <th>Barcode</th>
+          <th>Customer</th>
+          <th>Company No</th>
+          <th>Qty</th>
+          <th>Packer</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="popup" class="notification"></div>
+
+<div id="printArea">
+  <h3>📍 Tempat Penyimpanan</h3>
+  <svg id="placeBarcode"></svg>
+  <p id="placeText"></p>
+  <p id="packerText"></p>
+  <p id="dateText"></p>
+</div>
+
+<script>
+/* ===========================
+   Config Supabase (sesuaikan)
+   =========================== */
+const SUPABASE_URL = 'https://uusljhegkvahcjkaxqkz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ===========================
+   Element references
+   =========================== */
+const packerCodeInput = document.getElementById('packerCodeInput');
+const packerNameDisplay = document.getElementById('packerName');
+const placeInput = document.getElementById('placeInput');
+const barcodeInput = document.getElementById('barcodeInput');
+const tableBody = document.getElementById('tableBody');
+const totalCount = document.getElementById('totalCount');
+const checkAll = document.getElementById('checkAll');
+const popup = document.getElementById('popup');
+
+let currentPackerName = null;
+let lastCustomer = null;
+let scannedBarcodes = new Set();
+
+/* ===========================
+   Beep sound (Web Audio API)
+   =========================== */
+let audioCtx = null;
+function playBeep({ freq = 900, duration = 120, type = 'sine', volume = 0.2 } = {}) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = volume;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    setTimeout(() => {
+      o.stop();
+    }, duration);
+  } catch (e) {
+    // some browsers require user gesture; ignore if fails
+    console.warn('Beep error:', e);
+  }
+}
+
+/* ===========================
+   UI helper - popup
+   =========================== */
+function showPopup(message, type = "error", duration = 4000) {
+  popup.textContent = message;
+  popup.className = `notification show ${type}`;
+  if (type === 'warning') {
+    playBeep({ freq: 700, duration: 140, volume: 0.18 });
+  } else if (type === 'error') {
+    playBeep({ freq: 440, duration: 180, volume: 0.22, type: 'square' });
+  } else if (type === 'success') {
+    playBeep({ freq: 1200, duration: 90, volume: 0.12, type: 'sine' });
+  }
+  clearTimeout(popup._timeout);
+  popup._timeout = setTimeout(() => popup.classList.remove('show'), duration);
+}
+
+/* ===========================
+   Init
+   =========================== */
+window.onload = () => packerCodeInput.focus();
+
+/* otomatis ubah huruf besar pada tempat */
+placeInput.addEventListener('input', () => {
+  placeInput.value = placeInput.value.toUpperCase();
+});
+
+/* ================
+   Packer lookup
+   ================ */
+packerCodeInput.addEventListener('change', async () => {
+  const code = packerCodeInput.value.trim();
+  if (!code) return;
+
+  const { data, error } = await supabaseClient
+    .from('karyawan')
+    .select('nama')
+    .eq('kode', code)
+    .single();
+
+  if (error || !data) {
+    showPopup(`❌ Karyawan ${code} tidak ditemukan!`, 'error');
+    packerNameDisplay.textContent = '';
+    currentPackerName = null;
+  } else {
+    packerNameDisplay.textContent = data.nama;
+    currentPackerName = data.nama;
+    placeInput.disabled = false;
+    placeInput.focus();
+  }
+
+  packerCodeInput.value = '';
+});
+
+/* ================
+   Saat memilih tempat
+   ================ */
+placeInput.addEventListener('change', async () => {
+  const place = placeInput.value.trim().toUpperCase();
+  if (!place) {
+    showPopup('⚠️ Tempat belum diisi!', 'warning');
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('gudang_penyimpanan')
+    .select('*')
+    .eq('place', place);
+
+  if (error) {
+    showPopup('❌ Gagal memeriksa tempat penyimpanan!', 'error');
+    return;
+  }
+
+  tableBody.innerHTML = '';
+  scannedBarcodes.clear();
+  lastCustomer = null;
+
+  if (data && data.length > 0) {
+    showPopup(`ℹ️ Tempat ${place} sudah berisi ${data.length} item.`, 'success');
+
+    data.forEach(r => {
+      addRowToTable(r.barcode, r);
+      scannedBarcodes.add(r.barcode);
+    });
+    updateTotalCount();
+
+    lastCustomer = data[0].customer;
+    showPopup(`✅ Customer terdeteksi: ${lastCustomer}`, 'success');
+  }
+
+  barcodeInput.disabled = false;
+  barcodeInput.focus();
+});
+
+/* ===========================
+   Barcode scan / input
+   =========================== */
+barcodeInput.addEventListener('change', async () => {
+  const barcode = barcodeInput.value.trim();
+  const place = placeInput.value.trim().toUpperCase();
+  if (!barcode || !place || !currentPackerName) {
+    showPopup('⚠️ Lengkapi data karyawan & tempat!', 'warning');
+    barcodeInput.value = '';
+    return;
+  }
+
+  // CEK BARCODE SUDAH PERNAH DISIMPAN DALAM SESSION INI (atau telah dimuat dari tempat)
+  if (scannedBarcodes.has(barcode)) {
+    showPopup(`⚠️ Barcode ${barcode} sudah dimasukkan!`, 'warning');
+    // beep lebih tegas untuk duplicate
+    playBeep({ freq: 480, duration: 220, type: 'square', volume: 0.28 });
+    barcodeInput.value = '';
+    barcodeInput.focus();
+    return;
+  }
+
+  // Periksa keberadaan di tabel 'data'
+  const { data: rows, error } = await supabaseClient
+    .from('data')
+    .select('*')
+    .eq('box_number', barcode);
+
+  if (error || !rows || rows.length === 0) {
+    showPopup(`❌ Barcode ${barcode} tidak ditemukan di tabel data!`, 'error');
+    barcodeInput.value = '';
+    barcodeInput.focus();
+    return;
+  }
+
+  // cek customer berbeda
+  if (lastCustomer) {
+    const different = rows.find(r => r.customer !== lastCustomer);
+    if (different) {
+      showPopup(`🚫 Barang tidak sama! (harus: ${lastCustomer})`, 'error');
+      barcodeInput.value = '';
+      barcodeInput.focus();
+      return;
+    }
+  }
+
+  // siapkan payload untuk insert ke gudang_penyimpanan
+  const payload = rows.map(r => ({
+    ...r,
+    barcode,
+    place,
+    packer: currentPackerName,
+    saved_at: new Date().toISOString()
+  }));
+
+  const { error: insertError } = await supabaseClient
+    .from('gudang_penyimpanan')
+    .insert(payload);
+
+  if (insertError) {
+    showPopup(`❌ Gagal menyimpan ke penyimpanan: ${insertError.message}`, 'error');
+    return;
+  }
+
+  // hapus dari tabel data (restore jika perlu melalui tombol hapus terpilih)
+  await supabaseClient.from('data').delete().eq('box_number', barcode);
+
+  // tampilkan di tabel UI dan simpan ke set
+  payload.forEach(r => addRowToTable(barcode, r));
+  scannedBarcodes.add(barcode);
+
+  lastCustomer = rows[0].customer || lastCustomer;
+  updateTotalCount();
+
+  barcodeInput.value = '';
+  barcodeInput.focus();
+});
+
+/* ===========================
+   Tambah baris ke tabel UI
+   =========================== */
+function addRowToTable(barcode, data) {
+  const row = document.createElement('tr');
+
+  row.innerHTML = `
+    <td><input type="checkbox" class="row-check" data-barcode="${barcode}"></td>
+    <td class="barcode-cell">${barcode}</td>
+    <td>${data.customer || '-'}</td>
+    <td>${data.company_number || '-'}</td>
+    <td>${data.packaging_quantity || '-'}</td>
+    <td>${data.packer || currentPackerName || '-'}</td>
+    <td style="color:green;font-weight:bold;">✔️ Disimpan</td>
+  `;
+  // tambahkan highlight singkat untuk baris baru
+  row.classList.add('new-row-highlight');
+  tableBody.prepend(row);
+
+  // hapus kelas highlight setelah animasi selesai
+  setTimeout(() => row.classList.remove('new-row-highlight'), 1200);
+}
+
+/* ===========================
+   Hapus terpilih (restore)
+   =========================== */
+async function hapusTerpilih() {
+  const selected = document.querySelectorAll('.row-check:checked');
+  if (selected.length === 0) {
+    showPopup('⚠️ Pilih data yang ingin dihapus!', 'warning');
+    return;
+  }
+
+  if (!confirm(`Yakin ingin menghapus ${selected.length} data dan mengembalikannya ke tabel data?`)) return;
+
+  for (const cb of selected) {
+    const barcode = cb.dataset.barcode;
+
+    const { data: rows } = await supabaseClient
+      .from('gudang_penyimpanan')
+      .select('*')
+      .eq('barcode', barcode);
+
+    if (!rows || rows.length === 0) continue;
+
+    const restorePayload = rows.map(row => {
+      const copy = { ...row };
+      delete copy.id;
+      delete copy.saved_at;
+      delete copy.place;
+      delete copy.packer;
+      delete copy.barcode;
+      return copy;
+    });
+
+    await supabaseClient.from('data').insert(restorePayload);
+    await supabaseClient.from('gudang_penyimpanan').delete().eq('barcode', barcode);
+    document.querySelectorAll(`.row-check[data-barcode="${barcode}"]`).forEach(el => el.closest('tr').remove());
+    scannedBarcodes.delete(barcode);
+  }
+
+  updateTotalCount();
+  showPopup('✅ Data berhasil dikembalikan.', 'success');
+}
+
+/* ===========================
+   Select all checkbox
+   =========================== */
+checkAll.addEventListener('change', () => {
+  const all = document.querySelectorAll('.row-check');
+  all.forEach(cb => cb.checked = checkAll.checked);
+});
+
+/* ===========================
+   Update total count
+   =========================== */
+function updateTotalCount() {
+  totalCount.textContent = scannedBarcodes.size;
+}
+
+/* Optional: keyboard shortcut fokus ke barcode (Ctrl+B) */
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    if (!barcodeInput.disabled) barcodeInput.focus();
+  }
+});
+</script>
+</body>
+</html>

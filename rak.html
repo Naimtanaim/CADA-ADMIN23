@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cetak Stiker Range A01-A20</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+<style>
+  body {
+    font-family: 'Inter', Arial, sans-serif;
+    background: #f6f8fa;
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .controls {
+    flex: 0 0 320px;
+    background: #fff;
+    padding: 16px;
+    border-right: 1px solid #ddd;
+    box-shadow: 4px 0 12px rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  .controls label {
+    font-weight: 100;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .controls textarea {
+    width: 95%;
+    height: 90px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+  }
+
+  .controls select, .controls button {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+  }
+
+  .controls select {
+    background: #f8f9fa;
+    border: 1px solid #ccc;
+  }
+
+  .controls button.generate {
+    background: #007bff;
+    color: white;
+  }
+
+  .controls button.print {
+    background: #28a745;
+    color: white;
+  }
+
+  .sticker-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #fafafa;
+  }
+
+  .stickers {
+    display: grid;
+    gap: 20px;
+    justify-content: center;
+  }
+
+  .layout-1 {
+    grid-template-columns: 1fr;
+  }
+
+  .layout-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .sticker {
+    background: linear-gradient(90deg, #fffaf0, #fff);
+    border: 2px dashed #f4a261;
+    border-radius: 14px;
+    padding: 16px 20px;
+    box-shadow: 2px 4px 14px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    height: 180px;
+    box-sizing: border-box;
+  }
+
+  .code-box {
+    flex: 0 0 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .code {
+    font-size: 90px;
+    font-weight: 700;
+    color: #e76f51;
+    letter-spacing: 2px;
+  }
+
+  .barcode-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  /* ✅ default barcode */
+  .barcode-area svg {
+    height: 80px;
+    width: 80%;
+    background: #fff;
+    padding: 5px;
+    border-radius: 10px;
+  }
+
+  /* ✅ layout 2 — barcode diperbesar */
+  .layout-2 .barcode-area svg {
+    height: 90px;
+    width: 300%;
+  }
+
+  .barcode-label {
+    font-size: 18px;
+    font-weight: 800;
+    color: #777;
+    margin-top: 8px;
+  }
+
+  .arrow-tip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 80px;
+  }
+
+  .arrow {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #fff;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+  }
+
+  .arrow svg {
+    width: 50px;
+    height: 50px;
+  }
+
+  @media print {
+    body * { visibility: hidden; }
+    .stickers, .stickers * { visibility: visible; }
+    .stickers { position: absolute; left: 0; top: 0; width: 100%; }
+    .controls { display: none; }
+    body { background: white; margin: 0; }
+  }
+</style>
+</head>
+
+<body>
+  <div class="controls">
+    <label for="codes">Masukkan range kode (contoh: A01-A20):</label>
+    <textarea id="codes" placeholder=""></textarea>
+
+    <label for="layout">Pilih jumlah per baris:</label>
+    <select id="layout">
+      <option value="1">1 Kolom</option>
+      <option value="2" selected>2 Kolom</option>
+    </select>
+
+    <label for="direction">Petunjuk arah panah:</label>
+    <select id="direction">
+      <option value="down" selected>↓ Bawah</option>
+      <option value="up">↑ Atas</option>
+      <option value="left">← Kiri</option>
+      <option value="right">→ Kanan</option>
+    </select>
+
+    <button class="generate" id="generate">Generate Stiker</button>
+    <button class="print" id="print">Print Semua</button>
+  </div>
+
+  <div class="sticker-area">
+    <div class="stickers layout-2" id="stickerContainer"></div>
+  </div>
+
+<script>
+function generateSticker(code, direction) {
+  const div = document.createElement('div');
+  div.className = 'sticker';
+  const arrowHTML = getArrow(direction);
+
+  div.innerHTML = `
+    <div class="code-box">
+      <div class="code">${code}</div>
+    </div>
+    <div class="arrow-tip">${arrowHTML}</div>
+    <div class="barcode-area">
+      <svg id="barcode-${code}"></svg>
+      <div class="barcode-label">${code}</div>
+    </div>
+  `;
+  return div;
+}
+
+function getArrow(direction) {
+  const arrows = {
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="#e76f51" stroke-width="3"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="#e76f51" stroke-width="3"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>',
+    left: '<svg viewBox="0 0 24 24" fill="none" stroke="#e76f51" stroke-width="3"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>',
+    right: '<svg viewBox="0 0 24 24" fill="none" stroke="#e76f51" stroke-width="3"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>'
+  };
+  return `<div class="arrow">${arrows[direction]}</div>`;
+}
+
+function expandRange(rangeStr) {
+  const match = rangeStr.trim().match(/^([A-Z]+)(\d+)\s*-\s*([A-Z]+)?(\d+)$/i);
+  if (!match) return [rangeStr.trim()];
+  const prefix1 = match[1];
+  const prefix2 = match[3] || prefix1;
+  const startNum = parseInt(match[2]);
+  const endNum = parseInt(match[4]);
+  const result = [];
+  if (prefix1 !== prefix2) return [rangeStr.trim()];
+  const padLength = match[2].length;
+  for (let i = startNum; i <= endNum; i++) {
+    result.push(`${prefix1}${String(i).padStart(padLength, '0')}`);
+  }
+  return result;
+}
+
+document.getElementById('generate').addEventListener('click', () => {
+  const input = document.getElementById('codes').value.trim();
+  if (!input) return alert('Masukkan kode terlebih dahulu!');
+  const layout = document.getElementById('layout').value;
+  const direction = document.getElementById('direction').value;
+  const container = document.getElementById('stickerContainer');
+  container.innerHTML = '';
+  container.className = `stickers layout-${layout}`;
+
+  const parts = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  let codes = [];
+  parts.forEach(p => codes.push(...expandRange(p)));
+
+  codes.forEach(code => {
+    const sticker = generateSticker(code, direction);
+    container.appendChild(sticker);
+    JsBarcode(`#barcode-${code}`, code, {
+      format: 'CODE128',
+      width: 3.2,
+      height: layout === "2" ? 150 : 50, // ✅ barcode lebih besar di 2 kolom
+      displayValue: false,
+      margin: 2
+    });
+  });
+});
+
+document.getElementById('print').addEventListener('click', () => {
+  if (document.getElementById('stickerContainer').children.length === 0) {
+    alert('Belum ada stiker untuk dicetak!');
+    return;
+  }
+  window.print();
+});
+</script>
+</body>
+</html>

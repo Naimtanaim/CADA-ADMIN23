@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>作业菜单 + Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fff;
+      padding: 20px;
+    }
+
+    /* ================= LOGIN STYLE ================= */
+    #loginBox {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(4px);
+    }
+    #loginForm {
+      background: white;
+      padding: 25px;
+      width: 300px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    #loginForm input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #aaa;
+      border-radius: 6px;
+    }
+    #loginForm button {
+      width: 100%;
+      padding: 10px;
+      background: #1d4ed8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #loginForm button:hover {
+      background: #0f2f9b;
+    }
+    #errorMsg {
+      color: red;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    /* ================= MENU ASLI ================= */
+    .container {
+      display: flex;
+      gap: 40px;
+    }
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .column h3 {
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .menu-btn {
+      width: 220px;
+      padding: 6px 10px;
+      font-size: 15px;
+      text-align: left;
+      border: 1px solid #888;
+      border-radius: 4px;
+      background: #f9f9f9;
+      cursor: pointer;
+    }
+    .menu-btn:hover {
+      background: #eee;
+    }
+    .red { color: red; }
+    .blue { color: blue; }
+    .green { color: green; }
+
+    /* sembunyikan menu sebelum login */
+    #mainMenu { display: none; }
+
+    /* ================= LOGOUT BUTTON RIGHT TOP ================= */
+    #logoutBtn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      padding: 8px 14px;
+      background: red;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+      display: none; /* muncul setelah login */
+    }
+    #logoutBtn:hover {
+      background: darkred;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================= LOGIN LAYER ================= -->
+<div id="loginBox">
+  <div id="loginForm">
+    <h3>Login Karyawan</h3>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <div id="errorMsg"></div>
+  </div>
+</div>
+
+<!-- ================= LOGOUT BUTTON ================= -->
+<button id="logoutBtn" onclick="logout()">Logout</button>
+
+<!-- ================= MENU ASLI ================= -->
+<div id="mainMenu">
+  <div class="container">
+    <div class="column">
+      <h3>出貨課</h3>
+
+      <button class="menu-btn blue" onclick="window.location.href='149.html'">1. 栈板资料报表</button>
+      <button class="menu-btn red" onclick="window.location.href='karyawan.html'">2. Kartu karyawan</button>
+      <button class="menu-btn green" onclick="window.location.href='label.html'">3. Label</button>
+      <button class="menu-btn blue" onclick="window.location.href='doc.html'">4. Dockument</button>
+      <button class="menu-btn green" onclick="window.location.href='home.html'">5. 存放位置</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Contoh akun login */
+const accounts = [
+  { username: "1051130103", password: "280693" },
+  { username: "860217", password: "0000" }
+];
+
+function login() {
+  const user = document.getElementById("username").value.trim();
+  const pass = document.getElementById("password").value.trim();
+  const error = document.getElementById("errorMsg");
+
+  const match = accounts.find(a => a.username === user && a.password === pass);
+
+  if (match) {
+    document.getElementById("loginBox").style.display = "none";   
+    document.getElementById("mainMenu").style.display = "block"; 
+    document.getElementById("logoutBtn").style.display = "block"; 
+  } else {
+    error.textContent = "Username atau password salah!";
+  }
+}
+
+function logout(){
+  document.getElementById("logoutBtn").style.display = "none";
+  document.getElementById("mainMenu").style.display = "none";
+  document.getElementById("loginBox").style.display = "flex";
+  document.getElementById("username").value = "";
+  document.getElementById("password").value = "";
+  document.getElementById("errorMsg").textContent = "";
+}
+</script>
+
+</body>
+</html>

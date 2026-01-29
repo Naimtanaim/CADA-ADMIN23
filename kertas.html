@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>出貨課 - 存放位置資料</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<style>
+body { font-family:"Noto Sans TC",sans-serif;margin:0;background:#f6f7f9;padding:18px;}
+.container{max-width:900px;margin:auto;}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-bottom:12px;}
+button{background:#0b6cff;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer}
+button.ghost{background:#fff;color:#0b6cff;border:1px solid #d4d9ef}
+.sheet{background:#fff;border-radius:6px;padding:18px;box-shadow:0 6px 18px rgba(10,12,30,.06)}
+.sheet-header{display:flex;justify-content:space-between}
+.title-left{font-size:28px;font-weight:700}
+.meta{font-size:14px;color:#555}
+.barcode-top svg{width:320px;height:70px}
+table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
+th,td{border:1px solid #dfe3ee;padding:8px;text-align:center}
+th{background:#f9fafc}
+.toast{visibility:hidden;min-width:200px;background:#333;color:#fff;text-align:center;
+border-radius:8px;padding:12px;position:fixed;left:50%;bottom:30px;
+opacity:0;transform:translateX(-50%);transition:.5s}
+.toast.show{visibility:visible;opacity:1;bottom:50px}
+.toast.success{background:#28a745}
+.toast.error{background:#dc3545}
+@media print{.actions{display:none}}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="actions">
+<input id="placeInput" placeholder="輸入存放位置"
+ onkeydown="if(event.key==='Enter')filterByPlace()"
+ oninput="this.value=this.value.toUpperCase()">
+<button onclick="filterByPlace()">查詢</button>
+<button class="ghost" onclick="refreshData()">刷新</button>
+<button onclick="shipAll()">🚚 全部出貨</button>
+<button onclick="window.print()">🖨️ 列印</button>
+</div>
+
+<div class="sheet">
+<div class="sheet-header">
+<div>
+<div class="title-left">出貨課</div>
+<div class="meta">Print penyimpan 存放位置</div>
+<div id="dateNow" class="meta"></div>
+<div id="placeLabel" style="margin-top:10px;font-weight:600"></div>
+</div>
+<div class="barcode-top"><svg id="mainBarcode"></svg></div>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>No</th><th>條碼</th><th>箱號</th><th>公司號</th>
+<th>包裝數量</th><th>客戶</th><th>客戶訂單號</th>
+</tr>
+</thead>
+<tbody id="tableBody">
+<tr><td colspan="7">請輸入存放位置後查詢...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ================= SUPABASE ================= */
+const supabaseClient = supabase.createClient(
+  "https://uusljhegkvahcjkaxqkz.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g"
+);
+
+/* ================= INIT ================= */
+dateNow.textContent = "日期：" + new Date().toLocaleDateString("zh-TW");
+JsBarcode("#mainBarcode","出貨課",{format:"CODE128",height:60});
+
+/* ================= UTIL ================= */
+function toast(msg, ok=true){
+  const t=document.getElementById("toast");
+  t.textContent=msg;
+  t.className=`toast show ${ok?'success':'error'}`;
+  setTimeout(()=>t.className="toast",2500);
+}
+
+/* ================= LOAD ================= */
+async function refreshData(){
+  const {data,error}=await supabaseClient
+    .from("gudang_penyimpanan")
+    .select("*")
+    .order("id",{ascending:false})
+    .limit(10);
+  render(data,error);
+}
+
+async function filterByPlace(){
+  const place=placeInput.value.trim();
+  if(!place){toast("請輸入存放位置",false);return;}
+
+  const {data,error}=await supabaseClient
+    .from("gudang_penyimpanan")
+    .select("*")
+    .eq("place",place);
+
+  placeLabel.textContent="存放位置："+place;
+  JsBarcode("#mainBarcode",place,{format:"CODE128",height:60});
+  render(data,error);
+  placeInput.value="";
+}
+
+function render(data,error){
+  tableBody.innerHTML="";
+  if(error){tableBody.innerHTML=`<tr><td colspan="7">${error.message}</td></tr>`;return;}
+  if(!data.length){tableBody.innerHTML=`<tr><td colspan="7">沒有資料</td></tr>`;return;}
+
+  data.forEach((r,i)=>{
+    tableBody.innerHTML+=`
+    <tr>
+      <td>${i+1}</td>
+      <td>${r.barcode||""}</td>
+      <td>${r.box_number||""}</td>
+      <td>${r.company_number||""}</td>
+      <td>${r.packaging_quantity||""}</td>
+      <td>${r.customer||""}</td>
+      <td>${r.customer_order_number||""}</td>
+    </tr>`;
+  });
+}
+
+/* ================= SHIP ALL (FIXED) ================= */
+async function shipAll(){
+  const place=placeLabel.textContent.replace("存放位置：","").trim();
+  if(!place){toast("請先查詢",false);return;}
+
+  const {data,error}=await supabaseClient
+    .from("gudang_penyimpanan")
+    .select("*")
+    .eq("place",place);
+
+  if(error||!data.length){toast("沒有資料",false);return;}
+
+  const insertData=data.map(d=>({
+    barcode:d.barcode,
+    box_number:d.box_number,
+    company_number:d.company_number,
+    packaging_quantity:d.packaging_quantity,
+    customer:d.customer,
+    customer_order_number:d.customer_order_number,
+    place:d.place,
+    shipped_at:new Date().toISOString()
+  }));
+
+  const {error:insertErr}=await supabaseClient
+    .from("barang_dikirim")
+    .insert(insertData);
+
+  if(insertErr){
+    console.error(insertErr);
+    toast(insertErr.message,false);
+    return;
+  }
+
+  await supabaseClient
+    .from("gudang_penyimpanan")
+    .delete()
+    .eq("place",place);
+
+  tableBody.innerHTML=`<tr><td colspan="7">✅ 出貨完成</td></tr>`;
+  placeLabel.textContent="";
+  JsBarcode("#mainBarcode","出貨課",{format:"CODE128",height:60});
+  toast("🚚 出貨成功");
+}
+</script>
+</body>
+</html>

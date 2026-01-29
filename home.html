@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>出貨課1.06 - 批量修改存放位置</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Microsoft JhengHei', sans-serif;
+      margin: 0; padding: 0;
+      background-color: #f5f5f5;
+      font-size: 13px;
+    }
+    .container { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar {
+      width: 180px; background-color: #e0e0e0;
+      padding: 8px; border-right: 1px solid #ccc;
+      overflow-y: auto;
+    }
+    .sidebar button {
+      display: block; width: 100%;
+      margin: 4px 0; padding: 6px;
+      font-size: 12px; cursor: pointer;
+    }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    h3 {
+      margin: 0; padding: 10px;
+      background: #3f51b5; color: white;
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .search-bar {
+      background: #f0f0f0;
+      padding: 8px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      border-bottom: 1px solid #ccc;
+      position: sticky; top: 45px; z-index: 99;
+    }
+    .search-bar input { padding: 4px; width: 100px; font-size: 12px; }
+    .search-bar label { font-size: 12px; }
+    button { cursor: pointer; font-size: 12px; padding: 4px 8px; }
+
+    .table-container { flex: 1; overflow: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; }
+    th {
+      background-color: #e0e0e0;
+      position: sticky; top: 0; z-index: 5;
+    }
+    tr:nth-child(even) { background-color: #fff; }
+    tr:nth-child(odd) { background-color: #f9f9f9; }
+  </style>
+</head>
+<body>
+  <style>
+    .sidebar button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      color: #fff;
+      font-weight: bold;
+      transition: 0.25s;
+    }
+
+    .btn-1 { background: #1e88e5; }     /* Biru */
+    .btn-2 { background: #43a047; }     /* Hijau */
+    .btn-3 { background: #fb8c00; }     /* Orange */
+    .btn-4 { background: #8e24aa; }     /* Ungu */
+    .btn-5 { background: #e53935; }     /* Merah */
+    .btn-6 { background: #546e7a; }     /* Abu gelap */
+
+    /* efek hover */
+    .sidebar button:hover {
+      transform: translateX(5px);
+      opacity: 0.85;
+    }
+  </style>
+
+  <div class="container">
+    <div class="sidebar">
+
+      <button class="btn-1" onclick="window.location.href='data.html'">
+        1. 出貨課條碼查詢
+      </button>
+
+      <button class="btn-2" onclick="window.location.href='penyimpanan.html'">
+        2. 出貨部包裝
+      </button>
+
+      <button class="btn-3" onclick="window.location.href='stiker.html'">
+        3. 出貨課標籤列印
+      </button>
+
+      <button class="btn-4" onclick="window.location.href='kertas.html'">
+        4. 出貨Keluar
+      </button>
+
+      <button class="btn-5" onclick="window.location.href='kontol.html'">
+        5. 出貨紀錄
+      </button>
+
+      <button class="btn-6" onclick="window.location.href='s.html'">
+        6. 仓库位置
+      </button>
+
+    </div>
+
+    <div class="main">
+      <h3>
+        出貨課訂單總進度
+        <div>
+          新存放位置：
+          <input type="text" id="newPlace" placeholder="輸入新位置" style="padding:4px;width:120px;">
+          <button onclick="saveSelected()">📝 儲存選取位置</button>
+        </div>
+      </h3>
+
+      <div class="search-bar">
+        客戶: <input type="text" id="searchCustomer" />
+        客戶訂單號: <input type="text" id="searchOrder" />
+        送貨訂單號: <input type="text" id="searchDelivery" />
+        公司號: <input type="text" id="searchCompany" />
+        仓库位置: <input type="text" id="searchPlace" />
+        <button onclick="loadData()">🔄 重新整理</button>
+      </div>
+
+      <p id="countInfo" style="margin:6px 10px;">載入中...</p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="checkAll" /></th>
+              <th>NO</th>
+              <th>箱號</th>
+              <th>備料單號</th>
+              <th>原始備料單號</th>
+              <th>公司號</th>
+              <th>包裝數量</th>
+              <th>客戶</th>
+              <th>客戶訂單號</th>
+              <th>送貨訂單號</th>
+              <th>打包時間</th>
+              <th>打包人員</th>
+              <th>仓库位置</th>
+              <th>存檔時間</th>
+            </tr>
+          </thead>
+          <tbody id="dataBody">
+            <tr><td colspan="14">資料載入中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://uusljhegkvahcjkaxqkz.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let currentData = [];
+
+    async function loadData() {
+      const tbody = document.getElementById("dataBody");
+      tbody.innerHTML = "<tr><td colspan='14'>🔄 載入中...</td></tr>";
+
+      const c = document.getElementById("searchCustomer").value.trim();
+      const o = document.getElementById("searchOrder").value.trim();
+      const d = document.getElementById("searchDelivery").value.trim();
+      const company = document.getElementById("searchCompany").value.trim();
+      const place = document.getElementById("searchPlace").value.trim();
+
+      let query = supabaseClient
+    .from("gudang_penyimpanan")
+    .select("*", { count: "exact" })
+    .range(0, 999999)            // 👈 PATCH: hilangkan limit Supabase 1000 rows
+    .order("saved_at", { ascending: false });
+
+      if (c) query = query.ilike("customer", `%${c}%`);
+      if (o) query = query.ilike("customer_order_number", `%${o}%`);
+      if (d) query = query.ilike("delivery_order_number", `%${d}%`);
+      if (company) query = query.ilike("company_number", `%${company}%`);
+      if (place) query = query.ilike("place", `%${place}%`);
+
+      const { data, error } = await query;
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan='14' style="color:red;">❌ 載入錯誤: ${error.message}</td></tr>`;
+        return;
+      }
+      if (!data || data.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='14'>⚠️ 無資料</td></tr>";
+        document.getElementById("countInfo").textContent = "📦 無資料";
+        return;
+      }
+
+      currentData = data;
+      document.getElementById("countInfo").textContent = `📦 共有 ${data.length} 筆`;
+      tbody.innerHTML = "";
+      data.forEach((row, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><input type="checkbox" class="rowCheck" data-id="${row.id}"></td>
+          <td>${i + 1}</td>
+          <td>${row.box_number || ""}</td>
+          <td>${row.material_order_number || ""}</td>
+          <td>${row.original_material_order_number || ""}</td>
+          <td>${row.company_number || ""}</td>
+          <td>${row.packaging_quantity || ""}</td>
+          <td>${row.customer || ""}</td>
+          <td>${row.customer_order_number || ""}</td>
+          <td>${row.delivery_order_number || ""}</td>
+          <td>${row.packaging_time ? new Date(row.packaging_time).toLocaleString() : ""}</td>
+          <td>${row.packer || ""}</td>
+          <td>${row.place || ""}</td>
+          <td>${row.saved_at ? new Date(row.saved_at).toLocaleString() : ""}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("checkAll").addEventListener("change", function() {
+        const checked = this.checked;
+        document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = checked);
+      });
+    }
+
+    async function saveSelected() {
+      const checkedBoxes = Array.from(document.querySelectorAll(".rowCheck:checked"));
+      const newPlace = document.getElementById("newPlace").value.trim();
+
+      if (checkedBoxes.length === 0) {
+        alert("⚠️ 請先勾選要修改的資料。");
+        return;
+      }
+      if (!newPlace) {
+        alert("⚠️ 請輸入新的存放位置。");
+        return;
+      }
+
+      if (!confirm(`確定要將 ${checkedBoxes.length} 筆資料的存放位置改為「${newPlace}」嗎？`)) return;
+
+      let successCount = 0;
+      for (const cb of checkedBoxes) {
+        const id = cb.dataset.id;
+        const { error } = await supabaseClient
+          .from("gudang_penyimpanan")
+          .update({ place: newPlace })
+          .eq("id", id);
+        if (!error) successCount++;
+      }
+
+      alert(`✅ 已成功更新 ${successCount} 筆資料`);
+      loadData();
+    }
+
+    ["searchCustomer","searchOrder","searchDelivery","searchCompany","searchPlace"].forEach(id => {
+      document.getElementById(id).addEventListener("keypress", e => {
+        if (e.key === "Enter") loadData();
+      });
+    });
+
+    document.addEventListener("DOMContentLoaded", loadData);
+  </script>
+</body>
+</html>

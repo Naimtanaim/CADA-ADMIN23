@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PLT Duplicate & Report</title>
+<style>
+  body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; margin:30px; background:#f5f7fa; color:#333; }
+  h2 { text-align:center; margin-bottom:20px; }
+  .search-box { margin-bottom:20px; }
+  .search-box input { padding:10px; margin-right:6px; width:80px; }
+  .search-box button { padding:8px 20px; cursor:pointer; }
+
+  .table-container {
+    max-height: 490px;
+    overflow-y: auto;
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+  thead { background:#4a90e2; color:#fff; }
+  thead th { padding:12px; text-align:center; position: sticky; top:0; z-index:2; }
+  tbody td { padding:10px; border-bottom:1px solid #121; text-align:center; }
+  tbody tr:hover { background:#f1f7ff; }
+  tfoot { background:#f1f1f1; position: sticky; bottom:0; z-index:1; }
+  tfoot td { padding:12px; text-align:center; font-weight:bold; }
+
+  button.delete-btn { background:#e74c3c; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; }
+  button.delete-btn:hover { background:#c0392b; }
+
+  .summary {
+    display: flex;
+    justify-content: space-between;
+    background: #fff;
+    padding: 15px 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    margin-bottom: 10px;
+    font-size: 25px;
+    font-weight: bold;
+  }
+
+  .upload-csv { position:absolute; top:20px; right:20px; }
+  .upload-csv button { background:#28a745; color:white; padding:10px 16px; border-radius:8px; font-weight:bold; cursor:pointer; }
+  .upload-csv button:hover { background:#1e7e34; }
+
+  #weightWarning {
+    display: none;
+    background-color: #e74c3c;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    padding: 15px;
+    border-radius: 10px;
+    margin: 15px auto;
+    width: 80%;
+    box-sizing: border-box;
+    font-size: 20px;
+  }
+
+  .btn-delete-all {
+    position: absolute;
+    top:90px;
+    right: 50px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #f1f1f1 0%, #ff4b2b 0%);
+    color: white;
+    font-size: 15px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 1px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+  }
+  .btn-delete-all:hover { transform: translateY(-2px); box-shadow: 0 1px 20px rgba(0,0,0,0.3); }
+
+  .btn-print-duplicate {
+    position: absolute;
+    top: 89px;
+    right: 200px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 1px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+  }
+  .btn-print-duplicate:hover { transform: translateY(-2px); box-shadow: 0 1px 20px rgba(0,0,0,0.3); }
+
+  .draggable-box input {
+    width: 50px;
+    padding: 5px 6px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  .draggable-box {
+    position: absolute;
+    top: 10px;
+    left: 50px;
+    padding: 10px;
+    border-radius: 10px;
+    cursor: grab;
+    user-select: none;
+    font-family: Arial, sans-serif;
+  }
+  .draggable-box:active { cursor: grabbing; }
+  .output { margin-top: 8px; font-weight: bold; color: #333; }
+</style>
+</head>
+<body>
+
+<div class="upload-csv">
+  <a href="inputpl.html">
+    <button>Upload CSV</button>
+  </a>
+</div>
+
+<h2>栈板资料报表</h2>
+<button class="btn-delete-all">Hapus Semua</button>
+<button class="btn-print-duplicate" onclick="window.location.href='printer.html'">打印功能点评</button>
+
+<div class="search-box">
+  <input type="number" id="startNo" placeholder="PLT 1">
+  <input type="number" id="endNo" placeholder="PLT 2">
+  <button id="duplicateBtn">OK</button>
+</div>
+
+<div class="draggable-box" id="dragBox">
+  <label for="palletWeight">桟板重量:</label>
+  <input type="number" id="palletWeight" placeholder="">
+  <button onclick="setWeight()">设定</button>
+  <div class="output" id="result"></div>
+</div>
+
+<div class="summary">
+  <div>Total (材積): <span id="totalCbm">0</span></div>
+  <div>Total Box (箱數): <span id="totalBox">0</span></div>
+  <div>Total Berat(重量): <span id="totalWeight">0</span> kg</div>
+</div>
+
+<div id="weightWarning">Total总重量超过4000kg!</div>
+
+<div class="table-container">
+  <table id="pltTable">
+    <thead>
+      <tr>
+        <th>PLT</th>
+        <th>SIZE</th>
+        <th>長*寬*高</th>
+        <th>材積</th>
+        <th>CBM</th>
+        <th>箱數</th>
+        <th>重量</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+const SUPABASE_URL = 'https://uusljhegkvahcjkaxqkz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const tbody = document.querySelector("#pltTable tbody");
+const weightWarning = document.getElementById("weightWarning");
+
+let palletWeight = 0;
+let initialData = [];
+
+// ===============================
+// SET WEIGHT (FIX & RAPI)
+// ===============================
+// ===============================
+// SET PALLET WEIGHT TAMBAH PER BARIS
+// ===============================
+window.setWeight = async function () {
+  const input = document.getElementById("palletWeight");
+  const val = input.value;
+
+  if (val === "" || isNaN(val)) {
+    alert("Berat kosong! Tidak ada data diperbarui.");
+    return;
+  }
+
+  const addWeight = parseFloat(val);
+  palletWeight += addWeight; // total pallet weight global
+
+  document.getElementById("result").innerText =
+    "当前桟板重量: " + palletWeight + " kg ()";
+
+  const { data: rows, error } = await supabase
+    .from("plt_table_duplicate")
+    .select("NO, 重量");
+
+  if (error) {
+    alert("Gagal mengambil data: " + error.message);
+    return;
+  }
+
+for (const row of rows) {
+  const oldWeight = parseFloat(row.重量) || 0;
+  const newWeight = oldWeight + addWeight;  // Tambahkan berat per baris
+
+  await supabase
+    .from("plt_table_duplicate")
+    .update({ 重量: newWeight })
+    .eq("NO", row.NO);
+}
+
+
+  input.value = "";
+  loadData();
+  alert("✔ Berat pallet berhasil DITAMBAHKAN ke semua baris!");
+};
+
+
+// ===============================
+// LOAD DATA
+// ===============================
+async function loadData() {
+  tbody.innerHTML = "";
+
+  const { data } = await supabase
+    .from("plt_table_duplicate")
+    .select("*")
+    .order("NO", { ascending: true });
+
+  if (initialData.length === 0)
+    initialData = JSON.parse(JSON.stringify(data));
+
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.NO}</td>
+      <td>${row.SIZE}</td>
+      <td>${row["長*寬*高"] ?? ""}</td>
+      <td>${row.材積 ?? 0}</td>
+      <td>${row.CBM ?? 0}</td>
+      <td>${row.箱數 ?? 0}</td>
+      <td>${row.重量 ?? 0}</td>
+      <td><button class="delete-btn">Hapus 删除</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  addDeleteEvents();
+  calculateTotals();
+}
+
+// ===============================
+// HITUNG TOTAL (FIX FLOATING)
+// ===============================
+function calculateTotals() {
+  let totalCbm = 0,
+      totalBox = 0,
+      totalWeight = 0;
+
+  document.querySelectorAll("#pltTable tbody tr").forEach(row => {
+    totalCbm += parseFloat(row.cells[3].innerText) || 0;
+    totalBox += parseFloat(row.cells[5].innerText) || 0;
+    totalWeight += parseFloat(row.cells[6].innerText) || 0;
+  });
+
+  // Total CBM dan Box tetap pakai fixed atau integer
+  document.getElementById("totalCbm").innerText = totalCbm.toFixed(2).replace(/\.?0+$/, "");
+  document.getElementById("totalBox").innerText = totalBox;
+
+  // Total Weight: hilangkan nol berlebihan
+  document.getElementById("totalWeight").innerText = totalWeight
+    .toFixed(2)       // 1234.00
+    .replace(/\.?0+$/, ""); // jadi 1234 atau 1234.5
+
+  // Tampilkan warning kalau > 4000 kg
+  weightWarning.style.display = totalWeight > 4000 ? "block" : "none";
+}
+
+
+// ===============================
+// DELETE PER BARIS
+// ===============================
+function addDeleteEvents() {
+  document.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.onclick = async function () {
+      const tr = this.closest("tr");
+      const no = tr.cells[0].innerText;
+
+      const originalRow = initialData.find(r => r.NO == no);
+      if (!originalRow) return;
+
+      await supabase.from("plt_table").insert([originalRow]);
+      await supabase
+        .from("plt_table_duplicate")
+        .delete()
+        .eq("NO", no);
+
+      tr.remove();
+      calculateTotals();
+      alert(`✔ Data PLT ${no} telah dikembalikan seperti awal!`);
+    };
+  });
+}
+
+// ===============================
+// DELETE SEMUA
+// ===============================
+document.querySelector(".btn-delete-all")
+  .addEventListener("click", async () => {
+    if (!confirm("Yakin hapus semua duplicate & kembalikan ke awal?")) return;
+
+    if (initialData.length > 0) {
+      await supabase
+        .from("plt_table_duplicate")
+        .delete()
+        .neq("NO", 0);
+
+      await supabase.from("plt_table").insert(initialData);
+    }
+
+    tbody.innerHTML = "";
+    calculateTotals();
+    alert("✔ Semua data dikembalikan seperti awal!");
+  });
+
+// ===============================
+// DUPLICATE PLT
+// ===============================
+document.getElementById("duplicateBtn").onclick = async function () {
+  const startNo = parseInt(document.getElementById("startNo").value);
+  const endNo = parseInt(document.getElementById("endNo").value);
+
+  if (isNaN(startNo) || isNaN(endNo)) {
+    alert("Isi nomor awal & akhir!");
+    return;
+  }
+
+  document.getElementById("startNo").value = "";
+  document.getElementById("endNo").value = "";
+
+  const { data } = await supabase
+    .from("plt_table")
+    .select("*")
+    .gte("NO", startNo)
+    .lte("NO", endNo)
+    .order("NO");
+
+  if (!data.length) {
+    alert("Data tidak ditemukan!");
+    return;
+  }
+
+  await supabase.from("plt_table_duplicate").insert(data);
+  await supabase
+    .from("plt_table")
+    .delete()
+    .gte("NO", startNo)
+    .lte("NO", endNo);
+
+  loadData();
+};
+
+// LOAD AWAL
+loadData();
+</script>
+
+</body>
+</html>

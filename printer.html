@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>栈板资料报表</title>
+
+<style>
+body { font-family:'Noto Sans TC', sans-serif; margin:20px; }
+h1 { text-align:center; margin-bottom:20px; }
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+
+th, td {
+  border:1px solid #000;
+  padding:6px 8px;
+  text-align:center;
+}
+
+tfoot td {
+  font-weight:bold;
+  background:#f0f0f0;
+}
+
+.toolbar {
+  margin-bottom:16px;
+}
+
+.btn {
+  padding:6px 12px;
+  background:#2563eb;
+  color:#fff;
+  border:none;
+  cursor:pointer;
+}
+
+.prin {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:12px 24px;
+  background:linear-gradient(135deg,#6a11cb,#2575fc);
+  color:#fff;
+  font-size:16px;
+  border-radius:12px;
+  text-decoration:none;
+  position:absolute;
+  top:20px;
+  right:20px;
+}
+
+@media print {
+  .toolbar { display:none !important; }
+}
+</style>
+</head>
+
+<body>
+
+<h1>栈板资料报表</h1>
+
+<div class="toolbar">
+  <button id="reloadBtn" class="btn">Reload</button>
+  <button id="printBtn" class="btn">Print</button>
+  <!-- Tombol untuk membuka H.html -->
+<button id="openH" class="btn">nota 託運簽單</button>
+
+<script>
+document.getElementById('openH').addEventListener('click', () => {
+  // Buka H.html di tab baru
+  window.open('H.html', '_blank');
+});
+</script>
+
+  <a href="149.html" class="prin">Kembali</a>
+</div>
+
+<table id="dataTable">
+<thead>
+<tr>
+  <th>NO</th>
+  <th>SIZE</th>
+  <th>長*寬*高</th>
+  <th>材積</th>
+  <th>CBM</th>
+  <th>箱數</th>
+  <th>重量 (kg)</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+<tfoot>
+<tr>
+  <td colspan="3">TOTAL</td>
+  <td id="totalCubic"></td>
+  <td></td>
+  <td id="totalBoxes"></td>
+  <td id="totalWeight"></td>
+</tr>
+<tr>
+  <td colspan="6">總金額 (依噸數計算)</td>
+  <td id="totalMoney"></td>
+</tr>
+</tfoot>
+</table>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+const SUPABASE_URL = 'https://uusljhegkvahcjkaxqkz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const tbody = document.querySelector('#dataTable tbody');
+const totalCubicEl = document.getElementById('totalCubic');
+const totalBoxesEl = document.getElementById('totalBoxes');
+const totalWeightEl = document.getElementById('totalWeight');
+const totalMoneyEl = document.getElementById('totalMoney');
+
+const reloadBtn = document.getElementById('reloadBtn');
+const printBtn = document.getElementById('printBtn');
+
+let rowsCache = [];
+
+/* ===== HITUNG HARGA BERDASARKAN TON ===== */
+function calcPriceByTon(kg){
+  const ton = kg / 1000;
+
+  if (ton < 3.5) return null;
+  if (ton <= 3.5) return 5500;
+  if (ton <= 4.0) return 6000;
+  if (ton <= 5.0) return 6500;
+  if (ton <= 6.5) return 7000;
+  if (ton <= 8.0) return 7600;
+
+  return 7600 + Math.ceil(ton - 8) * 500;
+}
+
+async function loadData(){
+  tbody.innerHTML = '';
+
+  const { data, error } = await supabase
+    .from('plt_table_duplicate')
+    .select('NO,SIZE,"長*寬*高",材積,CBM,箱數,重量')
+    .order('NO');
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  rowsCache = data || [];
+
+  rowsCache.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${row.NO ?? ''}</td>
+      <td>${row.SIZE ?? ''}</td>
+      <td>${row["長*寬*高"] ?? ''}</td>
+      <td>${fmt(row.材積)}</td>
+      <td>${fmt(row.CBM)}</td>
+      <td>${fmt(row.箱數,0)}</td>
+      <td>${fmt(row.重量)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  recalcTotals();
+}
+
+function recalcTotals(){
+  let totalCubic = 0;
+  let totalBoxes = 0;
+  let totalWeight = 0;
+
+  rowsCache.forEach(r => {
+    totalCubic += num(r.材積);
+    totalBoxes += num(r.箱數);
+    totalWeight += num(r.重量);
+  });
+
+  totalCubicEl.textContent = fmt(totalCubic) + ' 材';
+  totalBoxesEl.textContent = fmt(totalBoxes,0) + ' 箱';
+  totalWeightEl.textContent = fmt(totalWeight) + ' kg';
+
+  const price = calcPriceByTon(totalWeight);
+
+  if (price === null) {
+    totalMoneyEl.textContent = '';
+  } else {
+    totalMoneyEl.textContent = price.toLocaleString() + ' NTD';
+  }
+}
+
+function num(v){
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function fmt(v, d = 2){
+  return Number(num(v).toFixed(d)).toLocaleString();
+}
+
+reloadBtn.addEventListener('click', loadData);
+printBtn.addEventListener('click', () => window.print());
+
+loadData();
+</script>
+
+
+</body>
+</html>

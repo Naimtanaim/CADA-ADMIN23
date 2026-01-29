@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manajemen Dokumen PDF Supabase</title>
+
+<style>
+body { font-family: Arial, sans-serif; background:#f0f2f5; margin:0; padding:20px; }
+h1 { text-align:center; color:#333; }
+.container { max-width:900px; margin:0 auto; background:white; padding:20px;
+  border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+
+.upload-section, .search-section { text-align:center; margin-bottom:20px; }
+input[type="file"], input[type="text"] { padding:8px; width:70%; margin-bottom:10px; }
+button { padding:8px 16px; border:none; background:#007bff; color:white;
+  border-radius:5px; cursor:pointer; }
+button:hover { background:#0056b3; }
+
+#status { margin-top:10px; color:green; }
+
+table { width:100%; border-collapse:collapse; margin-top:10px; }
+table, th, td { border:1px solid #ddd; }
+th, td { padding:10px; text-align:left; }
+th { background:#f5f5f5; }
+td a { color:#007bff; text-decoration:none; }
+td a:hover { text-decoration:underline; }
+
+.delete-btn { background:#dc3545; }
+.delete-btn:hover { background:#a71d2a; }
+
+.print-btn { background:#28a745; }
+.print-btn:hover { background:#1c7430; }
+
+/* MODAL */
+.modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%;
+  height:100%; background:rgba(0,0,0,0.7); }
+.modal-content { background:white; margin:50px auto; padding:20px; border-radius:8px;
+  max-width:80%; height:80%; }
+.close { float:right; font-size:24px; cursor:pointer; }
+iframe { width:100%; height:100%; border:none; }
+</style>
+
+</head>
+<body>
+
+<h1>Manajemen Dokumen</h1>
+
+<div class="container">
+
+  <div class="upload-section">
+    <input type="file" id="fileInput" accept="application/pdf">
+    <button id="uploadBtn">Upload PDF</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="search-section">
+    <input type="text" id="searchQuery" placeholder="Cari dokumen...">
+    <button id="searchBtn">Cari</button>
+  </div>
+
+  <table id="docTable">
+    <thead>
+      <tr>
+        <th>Nama File</th>
+        <th>Nama Asli</th>
+        <th>Tanggal Upload</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="4">Memuat dokumen...</td></tr>
+    </tbody>
+  </table>
+
+</div>
+
+<!-- MODAL PREVIEW -->
+<div id="previewModal" class="modal">
+  <div class="modal-content">
+    <span class="close" id="closeModal">&times;</span>
+    <iframe id="pdfPreview"></iframe>
+  </div>
+</div>
+
+<!-- SUPABASE (UMD, STABIL) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
+
+<script>
+// ========================
+// SUPABASE INIT
+// ========================
+const { createClient } = supabase;
+
+const SUPABASE_URL = "https://uusljhegkvahcjkaxqkz.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g";
+
+const supa = createClient(SUPABASE_URL, SUPABASE_KEY);
+const BUCKET_NAME = "documents";
+
+let allDocs = [];
+
+// ========================
+// UPLOAD FILE
+// ========================
+async function uploadFile() {
+  const file = document.getElementById("fileInput").files[0];
+  const status = document.getElementById("status");
+
+  if (!file) return alert("Silakan pilih file PDF.");
+
+  const safe = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const fileName = Date.now() + "_" + safe;
+
+  status.textContent = "Mengupload...";
+  status.style.color = "black";
+
+  // upload
+  const { error: uploadError } = await supa.storage.from(BUCKET_NAME).upload(fileName, file);
+  if (uploadError) {
+    status.textContent = "Gagal upload: " + uploadError.message;
+    status.style.color = "red";
+    return;
+  }
+
+  // public URL
+  const { data: urlData } = supa.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+  const publicUrl = urlData.publicUrl;
+
+  // simpan ke database
+  await supa.from("documents").insert([
+    {
+      file_name: fileName,
+      original_name: file.name,
+      uploaded_at: new Date().toISOString(),
+      url: publicUrl
+    }
+  ]);
+
+  status.textContent = "Upload berhasil!";
+  status.style.color = "green";
+  document.getElementById("fileInput").value = "";
+
+  fetchDocuments();
+}
+
+// ========================
+// FETCH ALL DOCS
+// ========================
+async function fetchDocuments() {
+  const { data, error } = await supa.from("documents").select("*").order("uploaded_at", { ascending: false });
+
+  if (error) {
+    document.querySelector("#docTable tbody").innerHTML =
+      "<tr><td colspan='4'>Gagal load: " + error.message + "</td></tr>";
+    return;
+  }
+
+  allDocs = data.map(d => ({
+    name: d.file_name,
+    original: d.original_name,
+    url: d.url,
+    created_at: new Date(d.uploaded_at).toLocaleString()
+  }));
+
+  displayDocuments(allDocs);
+}
+
+// ========================
+// DISPLAY TABLE
+// ========================
+function displayDocuments(docs) {
+  const tbody = document.querySelector("#docTable tbody");
+  tbody.innerHTML = "";
+
+  if (!docs.length) {
+    tbody.innerHTML = "<tr><td colspan='4'>Tidak ada dokumen.</td></tr>";
+    return;
+  }
+
+  docs.forEach(doc => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td><a href="#" onclick="previewDocument('${doc.url}')">${doc.name}</a></td>
+      <td>${doc.original}</td>
+      <td>${doc.created_at}</td>
+      <td>
+        <button class="print-btn" onclick="printDocument('${doc.url}')">Print</button>
+        <button class="delete-btn" onclick="deleteDoc('${doc.name}')">Hapus</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+// ========================
+// PREVIEW
+// ========================
+function previewDocument(url) {
+  document.getElementById("previewModal").style.display = "block";
+  document.getElementById("pdfPreview").src = url;
+}
+
+document.getElementById("closeModal").onclick = () => {
+  document.getElementById("previewModal").style.display = "none";
+  document.getElementById("pdfPreview").src = "";
+};
+
+// ========================
+// PRINT
+// ========================
+function printDocument(url) {
+  const win = window.open(url);
+  win.onload = () => win.print();
+}
+
+// ========================
+// DELETE
+// ========================
+async function deleteDoc(name) {
+  if (!confirm("Hapus dokumen?")) return;
+
+  await supa.storage.from(BUCKET_NAME).remove([name]);
+  await supa.from("documents").delete().eq("file_name", name);
+
+  fetchDocuments();
+}
+
+// ========================
+// SEARCH
+// ========================
+function searchDocuments() {
+  const q = document.getElementById("searchQuery").value.toLowerCase();
+  const filtered = allDocs.filter(d =>
+    d.name.toLowerCase().includes(q) ||
+    d.original.toLowerCase().includes(q)
+  );
+  displayDocuments(filtered);
+}
+
+// EVENTS
+document.getElementById("uploadBtn").onclick = uploadFile;
+document.getElementById("searchBtn").onclick = searchDocuments;
+
+// ========================
+// INITIAL LOAD
+// ========================
+async function init() {
+  await fetchDocuments();
+}
+
+init();
+</script>
+
+</body>
+</html>

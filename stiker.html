@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出貨課標籤列印 - 固定 Header 可拖曳 NO</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body {
+    font-family: 'Microsoft JhengHei', sans-serif;
+    background: #f9f9f9;
+    margin: 0;
+    padding: 0;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    background: #3f51b5;
+    color: white;
+    z-index: 100;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header h2 {
+    margin: 0 0 6px 0;
+    font-size: 16px;
+  }
+
+  .controls {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+  }
+
+  input, button {
+    font-size: 14px;
+    padding: 4px 8px;
+    margin: 2px;
+  }
+
+  #stickerContainer {
+    height: calc(100vh - 80px);
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .sticker {
+    width: 90mm;
+    height: 50mm;
+    border: 1px dashed #333;
+    border-radius: 4px;
+    margin: 8px auto;
+    padding: 6px 10px;
+    background: white;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .sticker .no {
+    font-size: 40px;
+    font-weight: bold;
+    color: #3f51b5;
+    position: absolute;
+    top: 120px;
+    left: 300px;
+    cursor: grab;
+  }
+
+  .sticker h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .sticker p {
+    margin: 2px 0;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  @media print {
+    body * { visibility: hidden; }
+    .sticker, .sticker * { visibility: visible; }
+    header { display: none; }
+    .sticker { page-break-after: always; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h2>出貨課標籤列印</h2>
+  <div class="controls">
+    <label>箱號 / Box Number：</label>
+    <input type="text" id="barcodeInput" placeholder="" autofocus>
+    <button onclick="window.print()">🖨️ 列印</button>
+  </div>
+</header>
+
+<div id="stickerContainer">
+  <p style="text-align:center;color:#777;">請輸入箱號以顯示標籤</p>
+</div>
+
+<script>
+const SUPABASE_URL = "https://uusljhegkvahcjkaxqkz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function loadSticker(barcode) {
+  const input = document.getElementById("barcodeInput");
+  if (!barcode) {
+    input.focus();
+    return;
+  }
+
+  const container = document.getElementById("stickerContainer");
+  container.innerHTML = "<p style='text-align:center;'>🔄 載入中...</p>";
+
+  const { data, error } = await supabaseClient
+    .from("gudang_penyimpanan")
+    .select("*")
+    .ilike("box_number", `%${barcode}%`)
+    .order("saved_at", { ascending: false });
+
+  if (error) {
+    container.innerHTML = `<p style='color:red;text-align:center;'>❌ 查詢錯誤：${error.message}</p>`;
+    input.value = "";
+    input.focus();
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    container.innerHTML = `<p style='text-align:center;color:#999;'>⚠️ 沒有找到相關箱號：${barcode}</p>`;
+    input.value = "";
+    input.focus();
+    return;
+  }
+
+  container.innerHTML = "";
+  data.forEach((row, index) => {
+    const div = document.createElement("div");
+    div.className = "sticker";
+    div.innerHTML = `
+      <div class="no">${row.packaging_board || (index + 1)}</div>
+      <h3>📦 ${row.box_number || ''}</h3>
+      <p><strong>客戶:</strong> ${row.customer || '-'}</p>
+      <p><strong>客戶訂單號:</strong> ${row.customer_order_number || '-'}</p>
+      <p><strong>公司別:</strong> ${row.company_number || '-'}</p>
+      <p><strong>包裝數量:</strong> ${row.packaging_quantity || '-'}</p>
+      <p><strong>存放位置:</strong> ${row.place || '-'}</p>
+      <p><strong>打包人員:</strong> ${row.packer || '-'}</p>
+      <p style="text-align:right;font-size:11px;color:#555;">${row.saved_at ? new Date(row.saved_at).toLocaleString() : ''}</p>
+    `;
+    container.appendChild(div);
+    makeDraggable(div.querySelector(".no"));
+  });
+
+  // Kosongkan input & fokus lagi
+  input.value = "";
+  input.focus();
+}
+
+// --- Drag & Drop ---
+function makeDraggable(el) {
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  el.addEventListener("mousedown", e => {
+    isDragging = true;
+    offsetX = e.clientX - el.getBoundingClientRect().left;
+    offsetY = e.clientY - el.getBoundingClientRect().top;
+    el.style.cursor = "grabbing";
+  });
+
+  document.addEventListener("mousemove", e => {
+    if (!isDragging) return;
+    const parentRect = el.parentElement.getBoundingClientRect();
+    let x = e.clientX - parentRect.left - offsetX;
+    let y = e.clientY - parentRect.top - offsetY;
+    x = Math.max(0, Math.min(x, parentRect.width - el.offsetWidth));
+    y = Math.max(0, Math.min(y, parentRect.height - el.offsetHeight));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (isDragging) {
+      isDragging = false;
+      el.style.cursor = "grab";
+    }
+  });
+}
+
+// --- Event listeners ---
+const input = document.getElementById("barcodeInput");
+
+input.addEventListener("keypress", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    loadSticker(input.value.trim());
+  }
+});
+
+input.addEventListener("blur", () => {
+  // Kalau kehilangan fokus, kembalikan fokus otomatis
+  setTimeout(() => input.focus(), 100);
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Warehouse Rack Storage — Modern</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body { margin:0; padding:0; background:#121212; color:#fff; font-family:'Segoe UI',sans-serif; display:flex; justify-content:center; }
+.container { width:95%; max-width:1200px; padding:30px; }
+h1 { text-align:center; margin-bottom:20px; color:#00e0ff; }
+select { padding:10px; font-size:16px; margin-bottom:20px; width:230px; border-radius:5px; border:none; }
+.grid { display:grid; grid-template-columns:repeat(8,1fr); gap:10px; }
+
+.cell { 
+    min-height:70px; border-radius:8px; display:flex; justify-content:center; 
+    align-items:center; flex-direction:column; padding:5px; cursor:pointer; 
+    background:#1c1c1c; text-align:center; transition:0.2s;
+}
+.cell:hover { background:#2a2a2a; transform:scale(1.05); }
+
+.cell.filled { 
+    background:#ffcc00 !important; 
+    color:#000 !important; 
+}
+
+.cell span { font-size:12px; font-weight:bold; }
+.status { margin-bottom:15px; color:#ccc; }
+
+.modal { display:none; position:fixed; z-index:999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.7); }
+.modal-content { background:#fff; color:#000; margin:80px auto; padding:20px; border-radius:10px; width:700px; max-height:85%; overflow-y:auto; }
+.modal-close { float:right; font-size:20px; cursor:pointer; font-weight:bold; }
+table { width:100%; border-collapse:collapse; margin-top:15px; }
+th, td { border:1px solid #777; padding:8px; text-align:left; }
+th { background:#e4e4e4; }
+.btn { padding:8px 15px; border:none; color:#fff; border-radius:6px; cursor:pointer; }
+.btn-danger { background:#d00000; }
+.btn-warning { background:#ffaa00; color:#000; }
+</style>
+
+</head>
+<body>
+<div class="container">
+
+    <h1>TEMPAT BARANG</h1>
+
+    <div id="status" class="status">Loading…</div>
+
+    <label>Pilih Rak:</label><br>
+    <select id="selectRack" onchange="renderGrid()">
+        <option value="">— Pilih Rak —</option>
+    </select>
+
+    <div id="rack-container"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="detailModal">
+    <div class="modal-content">
+        <span class="modal-close" id="closeDetail">&times;</span>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2 id="detailTitle">Slot Details</h2>
+            <div id="detailTotal" style="font-weight:bold; color:##000;"></div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>箱號</th>
+                    <th>Company No</th>
+                    <th>Qty</th>
+                    <th>Customer</th>
+                    <th>Order No</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="detailBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+
+const SUPABASE_URL = "https://uusljhegkvahcjkaxqkz.supabase.co"; 
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g"; 
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// GLOBAL DATA
+let gudangData = [];
+let selectedSlot = "";
+
+// ==============================
+// NORMALIZE PLACE
+// ==============================
+const normalize = p => {
+    if (!p) return "";
+    return p.toString().replace(/[\s\r\n\t]/g,"").toUpperCase();
+};
+
+// ==============================
+// LOAD DATA
+// ==============================
+async function loadData() {
+    document.getElementById("status").textContent = "Fetching data…";
+
+    let { data, error } = await db.from("gudang_penyimpanan").select("*");
+    if (error) return alert("Supabase Error: " + error.message);
+
+    gudangData = data || [];
+
+    // DEBUG: tampilkan data lengkap dalam bentuk tabel di console
+    console.table(gudangData, ["id","place","box_number","barcode","customer","company_number","packaging_quantity","customer_order_number"]);
+
+    let select = document.getElementById("selectRack");
+    select.innerHTML = `<option value="">— Pilih Rak —</option>`;
+    for (let c = 65; c <= 74; c++) {  // A-J
+        let rackID = String.fromCharCode(c);
+        select.innerHTML += `<option value="${rackID}">${rackID}</option>`;
+    }
+
+    document.getElementById("status").textContent = `✔ ${gudangData.length} items loaded`;
+    renderGrid();
+}
+
+// ==============================
+// RENDER GRID PER RAK
+// ==============================
+function renderGrid() {
+    const rack = document.getElementById("selectRack").value;
+    const container = document.getElementById("rack-container");
+
+    if (!rack) {
+        container.innerHTML = "";
+        return;
+    }
+
+    // Filter semua item di rak ini
+    let itemsInRack = gudangData.filter(d => normalize(d.place).startsWith(rack));
+    let uniqueBoxes = new Set(itemsInRack.map(i => i.barcode)).size;
+
+    // Header + total di sebelah kanan
+    let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h2>Rak ${rack}</h2>
+                    <div style="font-weight:bold; color:##000;">Total: ${uniqueBoxes} 箱</div>
+                </div>`;
+    html += `<div class="grid">`;
+
+    let totalSlot = 30; // setiap rak 30 slot (A01–A30)
+    for (let i = 1; i <= totalSlot; i++) {
+        let id = rack + String(i).padStart(2, "0");
+
+        let items = gudangData.filter(d => normalize(d.place) === id);
+
+        let className = "cell";
+        if (items.length > 0) className += " filled";
+
+        let label = items.length ? items[0].customer || "ITEM" : "";
+
+        html += `
+            <div class="${className}" onclick="openDetail('${id}')">
+                <span>${id}</span>
+                <span>${label}</span>
+            </div>
+        `;
+    }
+
+    html += "</div>";
+    container.innerHTML = html;
+}
+
+// ==============================
+// MODAL DETAIL
+// ==============================
+function openDetail(id) {
+    selectedSlot = id;
+    const modal = document.getElementById("detailModal");
+    const body = document.getElementById("detailBody");
+    const detailTotal = document.getElementById("detailTotal");
+
+    let items = gudangData.filter(d => normalize(d.place) === id);
+
+    // Hitung total unique barcode
+    let uniqueBoxes = new Set(items.map(i => i.barcode)).size;
+
+    document.getElementById("detailTitle").textContent = `RAK ${id}`;
+    detailTotal.textContent = `Total: ${uniqueBoxes} 箱`;
+
+    body.innerHTML = items.length
+        ? items.map(item => `
+            <tr>
+                <td>${item.box_number || "-"}</td>
+                <td>${item.company_number || "-"}</td>
+                <td>${item.packaging_quantity || 0}</td>
+                <td>${item.customer || "-"}</td>
+                <td>${item.customer_order_number || "-"}</td>
+                <td>
+                    <button class="btn btn-warning" onclick="moveItem('${item.id}')">Move</button>
+                    <button class="btn btn-danger" onclick="deleteItem('${item.id}')">Delete</button>
+                </td>
+            </tr>
+        `).join("")
+        : `<tr><td colspan="6">No items</td></tr>`;
+
+    modal.style.display = "block";
+}
+
+// ==============================
+// DELETE ITEM
+// ==============================
+async function deleteItem(id) {
+    if (!confirm("Delete this item?")) return;
+    await db.from("gudang_penyimpanan").delete().eq("id", id);
+    closeModal();
+    loadData();
+}
+
+// ==============================
+// MOVE ITEM
+// ==============================
+async function moveItem(id) {
+    let newSlot = prompt("Enter new slot (A01, J15, etc):", selectedSlot);
+    if (!newSlot) return;
+    newSlot = normalize(newSlot);
+
+    await db.from("gudang_penyimpanan").update({ place: newSlot }).eq("id", id);
+
+    closeModal();
+    loadData();
+}
+
+function closeModal() {
+    document.getElementById("detailModal").style.display = "none";
+}
+
+document.getElementById("closeDetail").onclick = closeModal;
+
+window.onclick = e => {
+    if (e.target === document.getElementById("detailModal")) closeModal();
+};
+
+loadData();
+
+</script>
+</body>
+</html>

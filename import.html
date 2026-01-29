@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Import Excel ke Supabase (Upload / Replace / Hapus)</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f9fb;
+      text-align: center;
+      padding: 30px;
+    }
+    input, button {
+      margin: 10px;
+      padding: 10px 15px;
+      font-size: 15px;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #btnUpload { background-color: #2e7d32; color: white; }
+    #btnReplace { background-color: #f9a825; color: white; }
+    #btnDelete { background-color: #d32f2f; color: white; }
+  </style>
+</head>
+<body>
+  <h2>📦 Import Excel ke Supabase</h2>
+  <input type="file" id="inputExcel" accept=".xlsx,.xls" /><br>
+  <button id="btnUpload">Upload ke Supabase</button>
+  <button id="btnReplace">Replace (Hapus & Upload Baru)</button>
+  <button id="btnDelete">🗑️ Hapus Semua Data</button>
+
+  <script>
+    // === KONFIGURASI SUPABASE ===
+    const SUPABASE_URL = 'https://uusljhegkvahcjkaxqkz.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1c2xqaGVna3ZhaGNqa2F4cWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0ODMzMTIsImV4cCI6MjA3MDA1OTMxMn0.eio4OSjH30XzfXn-9UxQRVwleGKi2dvdWo6Ggx8FW1g';
+
+    let jsonData = [];
+
+    // === 1️⃣ BACA FILE EXCEL ===
+    document.getElementById('inputExcel').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return alert('Pilih file Excel terlebih dahulu');
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheet];
+        jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+        alert(`✅ File terbaca: ${jsonData.length} baris`);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // === 2️⃣ UPLOAD TANPA HAPUS ===
+    document.getElementById('btnUpload').addEventListener('click', async () => {
+      if (jsonData.length === 0) return alert('⚠️ Belum ada data Excel yang dibaca');
+      await uploadData();
+    });
+
+    // === 3️⃣ REPLACE (HAPUS DULU, BARU UPLOAD) ===
+    document.getElementById('btnReplace').addEventListener('click', async () => {
+      if (jsonData.length === 0) return alert('⚠️ Belum ada data Excel yang dibaca');
+      if (!confirm('⚠️ Semua data lama akan dihapus. Lanjutkan?')) return;
+      await deleteAllData();
+      await uploadData();
+    });
+
+    // === 4️⃣ HAPUS SEMUA DATA DI SUPABASE ===
+    document.getElementById('btnDelete').addEventListener('click', async () => {
+      if (!confirm('🗑️ Yakin ingin menghapus SEMUA data di tabel "data"?')) return;
+      await deleteAllData();
+    });
+
+    // === Fungsi Upload ke Supabase ===
+    async function uploadData() {
+      const mappedData = jsonData.map(row => ({
+        packaging_board: row['packaging_board'],
+        box_number: row['box_number'],
+        material_order_number: row['material_order_number'],
+        original_material_order_number: row['original_material_order_number'],
+        company_number: row['company_number'],
+        packaging_quantity: row['packaging_quantity'] ? parseInt(row['packaging_quantity']) : null,
+        customer: row['customer'],
+        customer_order_number: row['customer_order_number'],
+        delivery_order_number: row['delivery_order_number'],
+        packaging_time: row['packaging_time'] ? new Date(row['packaging_time']).toISOString() : null,
+        packer: row['packer']
+      }));
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/data`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(mappedData)
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || 'Gagal upload data');
+        }
+
+        const result = await res.json();
+        alert(`✅ Berhasil upload ${result.length} baris ke Supabase`);
+      } catch (err) {
+        alert('❌ Upload gagal: ' + err.message);
+      }
+    }
+
+    // === Fungsi Hapus Semua Data ===
+    async function deleteAllData() {
+      try {
+        // Perhatikan filter id=not.is.null agar Supabase mengizinkan DELETE ALL
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/data?id=not.is.null`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Prefer': 'return=minimal'
+          }
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || 'Gagal menghapus data di Supabase');
+        }
+
+        alert('🗑️ Semua data di tabel "data" telah dihapus!');
+      } catch (err) {
+        alert('❌ Error hapus data: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
