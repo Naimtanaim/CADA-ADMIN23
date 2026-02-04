@@ -178,65 +178,49 @@ let palletWeight = 0;
 let initialData = [];
 
 // ===============================
-// SET WEIGHT (FIX & RAPI)
-// ===============================
-// ===============================
-// SET PALLET WEIGHT TAMBAH PER BARIS
+// SET PALLET WEIGHT
 // ===============================
 window.setWeight = async function () {
   const input = document.getElementById("palletWeight");
-  const val = input.value;
+  const addWeight = parseFloat(input.value);
 
-  if (val === "" || isNaN(val)) {
-    alert("Berat kosong! Tidak ada data diperbarui.");
+  if (isNaN(addWeight)) {
+    alert("Berat tidak valid");
     return;
   }
-
-  const addWeight = parseFloat(val);
-  palletWeight += addWeight; // total pallet weight global
-
-  document.getElementById("result").innerText =
-    "当前桟板重量: " + palletWeight + " kg ()";
 
   const { data: rows, error } = await supabase
     .from("plt_table_duplicate")
-    .select("NO, 重量");
+    .select("NO, 重量, 重量_加");
 
-  if (error) {
-    alert("Gagal mengambil data: " + error.message);
-    return;
+  if (error) return alert(error.message);
+
+  for (const r of rows) {
+    const base = Number(r.重量) || 0;
+    const extra = (Number(r.重量_加) || 0) + addWeight;
+
+    await supabase
+      .from("plt_table_duplicate")
+      .update({
+        重量_加: extra,
+        重量_总: base + extra
+      })
+      .eq("NO", r.NO);
   }
 
-for (const row of rows) {
-  const oldWeight = parseFloat(row.重量) || 0;
-  const newWeight = oldWeight + addWeight;  // Tambahkan berat per baris
-
-  await supabase
-    .from("plt_table_duplicate")
-    .update({ 重量: newWeight })
-    .eq("NO", row.NO);
-}
-
+  document.getElementById("result").innerText =
+    "当前桟板重量(追加): +" + addWeight + " kg";
 
   input.value = "";
   loadData();
-  alert("✔ Berat pallet berhasil DITAMBAHKAN ke semua baris!");
 };
-
 
 // ===============================
 // LOAD DATA
 // ===============================
 async function loadData() {
   tbody.innerHTML = "";
-
-  const { data } = await supabase
-    .from("plt_table_duplicate")
-    .select("*")
-    .order("NO", { ascending: true });
-
-  if (initialData.length === 0)
-    initialData = JSON.parse(JSON.stringify(data));
+  const { data } = await supabase.from("plt_table_duplicate").select("*").order("NO");
 
   data.forEach(row => {
     const tr = document.createElement("tr");
@@ -247,89 +231,148 @@ async function loadData() {
       <td>${row.材積 ?? 0}</td>
       <td>${row.CBM ?? 0}</td>
       <td>${row.箱數 ?? 0}</td>
-      <td>${row.重量 ?? 0}</td>
+      <td>${row.重量_总 ?? row.重量}</td>
       <td><button class="delete-btn">Hapus 删除</button></td>
     `;
     tbody.appendChild(tr);
   });
 
-  addDeleteEvents();
-  calculateTotals();
+  calculateTotals(); // pastikan dipanggil DI SINI
 }
 
+
 // ===============================
-// HITUNG TOTAL (FIX FLOATING)
+// HITUNG TOTAL
 // ===============================
 function calculateTotals() {
-  let totalCbm = 0,
-      totalBox = 0,
-      totalWeight = 0;
+  let totalCbm = 0, totalBox = 0, totalWeight = 0;
 
   document.querySelectorAll("#pltTable tbody tr").forEach(row => {
-    totalCbm += parseFloat(row.cells[3].innerText) || 0;
-    totalBox += parseFloat(row.cells[5].innerText) || 0;
-    totalWeight += parseFloat(row.cells[6].innerText) || 0;
+    const cbm = parseFloat(row.cells[3].innerText.replace(",", ".")) || 0;
+    const box = parseFloat(row.cells[5].innerText.replace(",", ".")) || 0;
+    const weight = parseFloat(row.cells[6].innerText.replace(/[^0-9\.-]/g, "").replace(",", ".")) || 0;
+
+
+    totalCbm += cbm;
+    totalBox += box;
+    totalWeight += weight;
   });
 
-  // Total CBM dan Box tetap pakai fixed atau integer
   document.getElementById("totalCbm").innerText = totalCbm.toFixed(2).replace(/\.?0+$/, "");
   document.getElementById("totalBox").innerText = totalBox;
+  document.getElementById("totalWeight").innerText = totalWeight.toFixed(2).replace(/\.?0+$/, "");
 
-  // Total Weight: hilangkan nol berlebihan
-  document.getElementById("totalWeight").innerText = totalWeight
-    .toFixed(2)       // 1234.00
-    .replace(/\.?0+$/, ""); // jadi 1234 atau 1234.5
-
-  // Tampilkan warning kalau > 4000 kg
   weightWarning.style.display = totalWeight > 4000 ? "block" : "none";
 }
 
-
 // ===============================
-// DELETE PER BARIS
+// DELETE PER BARIS & RESTORE
 // ===============================
 function addDeleteEvents() {
-  document.querySelectorAll(".delete-btn").forEach(btn => {
-    btn.onclick = async function () {
-      const tr = this.closest("tr");
-      const no = tr.cells[0].innerText;
+  tbody.addEventListener("click", async function(e) {
+    if (!e.target.classList.contains("delete-btn")) return;
 
-      const originalRow = initialData.find(r => r.NO == no);
-      if (!originalRow) return;
+    if (!confirm("Hapus baris ini dan kembalikan ke tabel utama?")) return;
 
-      await supabase.from("plt_table").insert([originalRow]);
-      await supabase
+    const row = e.target.closest("tr");
+    const no = row.cells[0].innerText; // Ambil NO dari kolom pertama
+
+    try {
+      // 1. Ambil data baris dari duplicate
+      const { data, error } = await supabase
+        .from("plt_table_duplicate")
+        .select("*")
+        .eq("NO", no)
+        .single(); // ambil satu row
+
+      if (error || !data) {
+        alert("Gagal ambil data duplicate: " + (error?.message || "Data tidak ditemukan"));
+        return;
+      }
+
+      // 2. Persiapkan data untuk restore ke tabel asli
+      const restoreRow = { ...data };
+      delete restoreRow.id;
+      delete restoreRow.重量_加;
+      delete restoreRow.重量_总;
+
+      // 3. Masukkan ke tabel asli
+      const { error: insertErr } = await supabase
+        .from("plt_table")
+        .insert([restoreRow]);
+
+      if (insertErr) {
+        alert("Gagal kembalikan ke tabel utama: " + insertErr.message);
+        return;
+      }
+
+      // 4. Hapus baris dari duplicate
+      const { error: deleteErr } = await supabase
         .from("plt_table_duplicate")
         .delete()
         .eq("NO", no);
 
-      tr.remove();
+      if (deleteErr) {
+        alert("Gagal hapus dari duplicate: " + deleteErr.message);
+        return;
+      }
+
+      // 5. Hapus row dari tabel HTML
+      row.remove();
+
+      // 6. Hitung ulang totals
       calculateTotals();
-      alert(`✔ Data PLT ${no} telah dikembalikan seperti awal!`);
-    };
+
+      alert("" + no + " berhasil dikembalikan ke tabel utama");
+    } catch (err) {
+      alert("Terjadi kesalahan:\n" + err.message);
+    }
   });
 }
 
-// ===============================
-// DELETE SEMUA
-// ===============================
-document.querySelector(".btn-delete-all")
-  .addEventListener("click", async () => {
-    if (!confirm("Yakin hapus semua duplicate & kembalikan ke awal?")) return;
+// Panggil addDeleteEvents() setelah loadData()
+addDeleteEvents();
 
-    if (initialData.length > 0) {
-      await supabase
-        .from("plt_table_duplicate")
-        .delete()
-        .neq("NO", 0);
 
-      await supabase.from("plt_table").insert(initialData);
+
+// ===============================
+// DELETE SEMUA & RESTORE
+// ===============================
+document.querySelector(".btn-delete-all").addEventListener("click", async () => {
+  if (!confirm("Kembalikan semua data ke tabel utama?")) return;
+
+  const { data, error } = await supabase
+    .from("plt_table_duplicate")
+    .select("*");
+
+  if (error || !data.length) {
+    alert("Tidak ada data duplicate");
+    return;
+  }
+
+  const restoreData = data.map(r => {
+    const x = { ...r };
+    delete x.id;
+    delete x.重量_加;
+    delete x.重量_总;
+    return x;
+  });
+
+  try {
+    for (const row of restoreData) {
+      await supabase.from("plt_table").insert([row]);
     }
+
+    await supabase.from("plt_table_duplicate").delete().neq("NO", 0);
 
     tbody.innerHTML = "";
     calculateTotals();
-    alert("✔ Semua data dikembalikan seperti awal!");
-  });
+    alert("✔ Semua data berhasil dikembalikan");
+  } catch (err) {
+    alert("Restore gagal:\n" + err.message);
+  }
+});
+
 
 // ===============================
 // DUPLICATE PLT
