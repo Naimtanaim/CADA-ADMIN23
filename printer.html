@@ -26,9 +26,7 @@ tfoot td {
   background:#f0f0f0;
 }
 
-.toolbar {
-  margin-bottom:16px;
-}
+.toolbar { margin-bottom:16px; }
 
 .btn {
   padding:6px 12px;
@@ -66,15 +64,14 @@ tfoot td {
 <div class="toolbar">
   <button id="reloadBtn" class="btn">Reload</button>
   <button id="printBtn" class="btn">Print</button>
-  <!-- Tombol untuk membuka H.html -->
-<button id="openH" class="btn">nota 託運簽單</button>
+  <button id="openH" class="btn">nota 託運簽單</button>
 
 <script>
-document.getElementById('openH').addEventListener('click', () => {
-  // Buka H.html di tab baru
-  window.open('H.html', '_blank');
-});
+  document.getElementById('openH').addEventListener('click', () => {
+    window.location.href = 'H.html';
+  });
 </script>
+
 
   <a href="149.html" class="prin">Kembali</a>
 </div>
@@ -96,12 +93,18 @@ document.getElementById('openH').addEventListener('click', () => {
 
 <tfoot>
 <tr>
+  <td colspan="6">總重量 (重量_加)</td>
+  <td id="totalWeight25"></td>
+</tr>
+
+<tr>
   <td colspan="3">TOTAL</td>
   <td id="totalCubic"></td>
   <td></td>
   <td id="totalBoxes"></td>
   <td id="totalWeight"></td>
 </tr>
+
 <tr>
   <td colspan="6">總金額 (依噸數計算)</td>
   <td id="totalMoney"></td>
@@ -121,23 +124,22 @@ const totalCubicEl = document.getElementById('totalCubic');
 const totalBoxesEl = document.getElementById('totalBoxes');
 const totalWeightEl = document.getElementById('totalWeight');
 const totalMoneyEl = document.getElementById('totalMoney');
+const totalWeight25El = document.getElementById('totalWeight25');
 
 const reloadBtn = document.getElementById('reloadBtn');
 const printBtn = document.getElementById('printBtn');
 
 let rowsCache = [];
 
-/* ===== HITUNG HARGA BERDASARKAN TON ===== */
+/* ===== HARGA BERDASARKAN TON ===== */
 function calcPriceByTon(kg){
   const ton = kg / 1000;
-
   if (ton < 3.5) return null;
   if (ton <= 3.5) return 5500;
   if (ton <= 4.0) return 6000;
   if (ton <= 5.0) return 6500;
   if (ton <= 6.5) return 7000;
   if (ton <= 8.0) return 7600;
-
   return 7600 + Math.ceil(ton - 8) * 500;
 }
 
@@ -146,7 +148,7 @@ async function loadData(){
 
   const { data, error } = await supabase
     .from('plt_table_duplicate')
-    .select('NO,SIZE,"長*寬*高",材積,CBM,箱數,重量')
+    .select('NO,SIZE,"長*寬*高",材積,CBM,箱數,重量,重量_加')
     .order('NO');
 
   if (error) {
@@ -173,28 +175,38 @@ async function loadData(){
   recalcTotals();
 }
 
-function recalcTotals(){
+// ===============================
+// RECALC TOTALS (FINAL FIXED)
+// ===============================
+async function recalcTotals() {
   let totalCubic = 0;
   let totalBoxes = 0;
+  let totalWeight25 = 0;
   let totalWeight = 0;
 
   rowsCache.forEach(r => {
-    totalCubic += num(r.材積);
-    totalBoxes += num(r.箱數);
-    totalWeight += num(r.重量);
+    totalCubic += parseFloat(r.材積) || 0;
+    totalBoxes += parseInt(r.箱數) || 0;
+    totalWeight25 += parseInt(r.重量_加) || 0;
   });
+
+  try {
+    const { data, error } = await supabase
+      .from("plt_table_duplicate_total")
+      .select("total_weight")
+      .single();
+
+    if (!error && data)
+      totalWeight = parseFloat(data.total_weight) || 0;
+  } catch(e){}
 
   totalCubicEl.textContent = fmt(totalCubic) + ' 材';
   totalBoxesEl.textContent = fmt(totalBoxes,0) + ' 箱';
   totalWeightEl.textContent = fmt(totalWeight) + ' kg';
+  totalWeight25El.textContent = fmt(totalWeight25,0) + ' kg';
 
   const price = calcPriceByTon(totalWeight);
-
-  if (price === null) {
-    totalMoneyEl.textContent = '';
-  } else {
-    totalMoneyEl.textContent = price.toLocaleString() + ' NTD';
-  }
+  totalMoneyEl.textContent = price ? price.toLocaleString() + ' NTD' : '';
 }
 
 function num(v){
@@ -211,7 +223,6 @@ printBtn.addEventListener('click', () => window.print());
 
 loadData();
 </script>
-
 
 </body>
 </html>
