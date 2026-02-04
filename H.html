@@ -62,16 +62,16 @@ form input { font-size: 14px; padding: 4px; box-sizing: border-box; width: 200px
 }
 
 .field { position: absolute; font-size: 15px; white-space: nowrap; }
-.date    { top: 19mm; left: 128mm; font-weight: bold; }
-.customer { top: 29mm; left: 29mm; font-weight: bold; }
-.start_end { top: 40mm; left: 25mm; font-weight: bold; }
-.qty   { top: 90mm; left: 28mm; font-weight: bold; }
-.board { top: 90mm; left: 43mm; font-weight: bold; }
-.weight{ top: 90mm; left: 68mm; font-weight: bold; }
-.cbm   { top: 90mm; left: 100mm; font-weight: bold; }
-.basic { top: 100mm; left: 30mm; font-weight: bold; }
-.extra { top: 100mm; left: 68mm; font-weight: bold; }
-.total { top: 110mm; left: 30mm; font-weight: bold; }
+.date    { top: 13mm; left: 120mm; font-weight: bold; }
+.customer { top: 22mm; left: 20mm; font-weight: bold; }
+.start_end { top: 40mm; left: 22mm; font-weight: bold; }
+.qty   { top: 83mm; left: 20mm; font-weight: bold; }
+.board { top: 83mm; left: 35mm; font-weight: bold; }
+.weight{ top: 83mm; left: 60mm; font-weight: bold; }
+.cbm   { top: 83mm; left: 93mm; font-weight: bold; }
+.basic { top: 92mm; left: 23mm; font-weight: bold; }
+.extra { top: 92mm; left: 60mm; font-weight: bold; }
+.total { top: 102mm; left: 23mm; font-weight: bold; }
 
 /* style umum (opsional) */
 .delivery {
@@ -101,7 +101,7 @@ form input { font-size: 14px; padding: 4px; box-sizing: border-box; width: 200px
 /* tiap baris delivery */
 .delivery-line {
   line-height: 1.6;
-  min-height: 1.2em; 
+  min-height: 2.0em; 
   margin-bottom: 6px;
 }
 
@@ -119,11 +119,26 @@ form input { font-size: 14px; padding: 4px; box-sizing: border-box; width: 200px
 <body>
 
 <form id="form">
-  <h3>Isi Data 託運簽單</h3>
+  <h3>NOTA 託運簽單</h3>
 
   <div class="buttons">
     <button type="button" onclick="updatePaper()">更新單據</button>
     <button type="button" onclick="window.print()">列印單據</button>
+    <div class="form-row">
+  <label>Area:</label>
+  <select id="areaSelect">
+    <option value="">-- Pilih Area --</option>
+  </select>
+</div>
+
+<div class="form-row">
+  <label>Truck Type:</label>
+  <select id="truckTypeSelect">
+    <option value="">-- Pilih Truck --</option>
+  </select>
+</div>
+
+
     <label for="textColor">選擇文字顏色:</label>
     <input type="color" id="textColor" value="#000000">
   </div>
@@ -195,6 +210,8 @@ form input { font-size: 14px; padding: 4px; box-sizing: border-box; width: 200px
     <div class="field basic" id="f_basic"></div>
     <div class="field total" id="f_total"></div>
     <div class="field extra" id="f_extra"></div>
+    
+
   </div>
 </div>
 
@@ -221,7 +238,7 @@ function updateDeliveryPreview() {
 }
 
 function updatePaper() {
-  f_date.textContent = `${year.value}　　${month.value}　　${day.value}`;
+ f_date.innerHTML = `${year.value}&ensp;&ensp;&ensp;&ensp;&ensp;${month.value}&ensp;&ensp;&ensp;&ensp;&ensp;${day.value}`;
   f_customer.textContent = customer.value;
   f_board.textContent  = board.value;
   f_qty.textContent    = qty.value;
@@ -243,29 +260,134 @@ async function loadTotalsFromSupabase() {
     .from('plt_table_duplicate_total')
     .select('*')
     .single();
-  if (!error) {
+  if (!error && data) {
     board.value  = Math.ceil(num(data.total_box));
     qty.value    = Math.ceil(num(data.total_no));
     weight.value = Math.ceil(num(data.total_weight));
     cbm.value    = Math.ceil(num(data.total_cbm));
     basic.value  = Math.ceil(num(data.total_money));  // isi otomatis
-    extra.value  = 0; // kalau perlu default 0 atau dari DB
+    
+    // jangan isi extra kalau tidak ada
+     basic.value = '';
 
     // 🔹 update preview & total
     calcTotal();  // ini akan mengupdate total dan memanggil updatePaper()
   }
 }
 
-
 function calcTotal() {
-  total.value = (num(basic.value) + num(extra.value)).toFixed(0);
+  const b = Number(basic.value) || 0;
+  const e = Number(extra.value) || 0;
+  const sum = b + e;
+
+  total.value = sum > 0 ? sum : '';
   updatePaper();
 }
 
+
+function setTodayDate() {
+  const today = new Date();
+  year.value  = today.getFullYear();
+  month.value = String(today.getMonth() + 1).padStart(2, '0');
+  day.value   = String(today.getDate()).padStart(2, '0');
+  updatePaper();
+}
+
+
+
+const areaSelect = document.getElementById('areaSelect');
+const truckTypeSelect = document.getElementById('truckTypeSelect');
+
+// 1️⃣ Load semua area
+async function loadAreas() {
+  const { data, error } = await supabaseClient
+    .from('truck_price')
+    .select('area')
+    .order('area', { ascending: true });
+
+  if (!error && data) {
+    const uniqueAreas = [...new Set(data.map(d => d.area))];
+    uniqueAreas.forEach(area => {
+      const opt = document.createElement('option');
+      opt.value = area;
+      opt.textContent = area;
+      areaSelect.appendChild(opt);
+    });
+  }
+}
+
+// 2️⃣ Load truck_type berdasarkan area
+async function loadTruckTypes(area) {
+  truckTypeSelect.innerHTML = '<option value="">-- Pilih Truck --</option>';
+  if (!area) return;
+
+  const { data, error } = await supabaseClient
+    .from('truck_price')
+    .select('truck_type')
+    .eq('area', area);
+
+  if (!error && data) {
+    data.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.truck_type;
+      opt.textContent = d.truck_type;
+      truckTypeSelect.appendChild(opt);
+    });
+  }
+}
+
+// 3️⃣ Ambil harga dari Supabase sesuai truck_type
+async function updateTruckPrice() {
+  const selectedArea = areaSelect.value;
+  const selectedTruck = truckTypeSelect.value;
+  if (!selectedArea || !selectedTruck) return;
+
+  const { data, error } = await supabaseClient
+    .from('truck_price')
+    .select('price')
+    .eq('area', selectedArea)
+    .eq('truck_type', selectedTruck)
+    .limit(1)
+    .single();
+
+  if (!error && data) {
+    // langsung update harga basic sesuai tabel
+    basic.value = data.price;
+    calcTotal();
+
+    // update preview truk
+    f_truck.textContent = selectedTruck;
+  } else {
+    basic.value = '';
+    f_truck.textContent = '—';
+  }
+}
+
+// Event listener
+areaSelect.addEventListener('change', () => loadTruckTypes(areaSelect.value));
+truckTypeSelect.addEventListener('change', updateTruckPrice);
+
+
 window.addEventListener('DOMContentLoaded', () => {
+  loadTotalsFromSupabase(); // load totals dari supabase
+  loadAreas();              // load area ke dropdown
+
+  // update preview saat inputan lain berubah
+  document.querySelectorAll('#form input').forEach(el => el.addEventListener('input', updatePaper));
+  basic.addEventListener('input', calcTotal);
+  extra.addEventListener('input', calcTotal);
+  textColor.addEventListener('input', updatePaper);
+  deliveryInputs.forEach(i => i.addEventListener('input', updateDeliveryPreview));
+});
+
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTodayDate();            // ⬅️ TAMBAHKAN INI
   loadTotalsFromSupabase();
 
-  document.querySelectorAll('#form input').forEach(el => el.addEventListener('input', updatePaper));
+  document.querySelectorAll('#form input').forEach(el =>
+    el.addEventListener('input', updatePaper)
+  );
   basic.addEventListener('input', calcTotal);
   extra.addEventListener('input', calcTotal);
   textColor.addEventListener('input', updatePaper);
@@ -273,6 +395,5 @@ window.addEventListener('DOMContentLoaded', () => {
   deliveryInputs.forEach(i => i.addEventListener('input', updateDeliveryPreview));
 });
 </script>
-
 </body>
 </html>
