@@ -2,12 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Kartu Nama Modern</title>
+<title>Kartu Nama Putih Modern</title>
 
 <style>
 body{
-    font-family: 'Segoe UI', sans-serif;
-    background:#eaeaea;
+    font-family: Arial, sans-serif;
+    background:#f0f0f0;
     padding:20px;
 }
 
@@ -25,25 +25,13 @@ body{
     width:100%;
     padding:8px;
     margin-bottom:10px;
-    border-radius:6px;
-    border:1px solid #ccc;
 }
 
 button{
     padding:8px 14px;
     border:none;
-    border-radius:6px;
     cursor:pointer;
-    font-weight:bold;
-}
-
-.update-btn{
-    background:#111;
-    color:white;
-}
-
-.print-btn{
-    background:#007bff;
+    background:black;
     color:white;
 }
 
@@ -51,49 +39,48 @@ button{
 .card{
     width:90mm;
     height:55mm;
-    padding:12px;
+    background:white;
+    border:2px solid #000;
+    padding:10px;
     box-sizing:border-box;
+    position:relative;
     display:flex;
-    justify-content:space-between;
-    border-radius:12px;
-    color:white;
-
-    background: linear-gradient(135deg, #1c1c1c, #000000);
-    box-shadow:0 10px 25px rgba(0,0,0,0.3);
-}
-
-.left{
-    width:65%;
-}
-
-.logo{
-    font-size:20px;
-    font-weight:700;
-    letter-spacing:1px;
-}
-
-.subtitle{
-    font-size:11px;
-    opacity:0.8;
-    margin-bottom:8px;
-}
-
-.info{
-    font-size:10px;
-    margin-bottom:4px;
-}
-
-.qr{
-    width:30%;
-    display:flex;
-    justify-content:center;
+    flex-direction:column;
     align-items:center;
 }
 
+/* LOGO */
+.logo-img{
+    width:50px;
+    height:50px;
+    object-fit:contain;
+    margin-bottom:5px;
+}
+
+/* NAMA TOKO TENGAH */
+.store-name{
+    font-size:18px;
+    font-weight:bold;
+    text-align:center;
+    margin-bottom:8px;
+}
+
+/* INFO DIGESER KE BAWAH */
+.info-box{
+    margin-top:auto;
+    text-align:center;
+    font-size:10px;
+}
+
+/* QR */
+.qr{
+    position:absolute;
+    right:10px;
+    bottom:10px;
+}
+
 .qr img{
-    background:white;
-    padding:4px;
-    border-radius:8px;
+    width:60px;
 }
 
 /* PRINT */
@@ -115,7 +102,6 @@ button{
         position:absolute;
         left:0;
         top:0;
-        box-shadow:none;
     }
 }
 </style>
@@ -123,57 +109,73 @@ button{
 
 <body>
 
-<h2>Generator Kartu Nama Modern</h2>
+<h2>Generator Kartu Nama Putih</h2>
 
 <div class="form-box">
     <input type="text" id="namaToko" value="TOKO ZIZAN">
-    <input type="text" id="subtitle" value="Toko Online & Retail Modern">
     <input type="text" id="alamat" value="Jl. Contoh No.123, Taipei">
     <input type="text" id="hp" value="0912-345-678">
     <input type="text" id="email" value="tokozizan@email.com">
     <input type="text" id="qrLink" value="https://tokozizan.com">
+    
+    <label>Upload Logo:</label>
+    <input type="file" id="logoInput" accept="image/*">
 
-    <button class="update-btn" onclick="updateCard()">Update</button>
-    <button class="print-btn" onclick="window.print()">Print</button>
+    <button onclick="updateCard()">Update</button>
+    <button onclick="window.print()">Print</button>
 </div>
 
 <div class="card">
 
-    <div class="left">
-        <div class="logo" id="previewNama">TOKO ZIZAN</div>
-        <div class="subtitle" id="previewSub">Toko Online & Retail Modern</div>
+    <img id="previewLogo" class="logo-img" src="" alt="">
+    
+    <div class="store-name" id="previewNama">
+        TOKO ZIZAN
+    </div>
 
-        <div class="info" id="previewAlamat">📍 Jl. Contoh No.123, Taipei</div>
-        <div class="info" id="previewHp">📞 0912-345-678</div>
-        <div class="info" id="previewEmail">📧 tokozizan@email.com</div>
+    <div class="info-box">
+        <div id="previewAlamat">Jl. Contoh No.123, Taipei</div>
+        <div id="previewHp">0912-345-678</div>
+        <div id="previewEmail">tokozizan@email.com</div>
     </div>
 
     <div class="qr">
         <img id="previewQR"
-        src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://tokozizan.com"
-        width="85">
+        src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://tokozizan.com">
     </div>
 
 </div>
 
 <script>
+
 function updateCard(){
-    let nama = document.getElementById("namaToko").value;
-    let sub = document.getElementById("subtitle").value;
-    let alamat = document.getElementById("alamat").value;
-    let hp = document.getElementById("hp").value;
-    let email = document.getElementById("email").value;
+    document.getElementById("previewNama").innerText =
+        document.getElementById("namaToko").value;
+
+    document.getElementById("previewAlamat").innerText =
+        document.getElementById("alamat").value;
+
+    document.getElementById("previewHp").innerText =
+        document.getElementById("hp").value;
+
+    document.getElementById("previewEmail").innerText =
+        document.getElementById("email").value;
+
     let qr = document.getElementById("qrLink").value;
-
-    document.getElementById("previewNama").innerText = nama;
-    document.getElementById("previewSub").innerText = sub;
-    document.getElementById("previewAlamat").innerText = "📍 " + alamat;
-    document.getElementById("previewHp").innerText = "📞 " + hp;
-    document.getElementById("previewEmail").innerText = "📧 " + email;
-
     document.getElementById("previewQR").src =
-    "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" + encodeURIComponent(qr);
+        "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" 
+        + encodeURIComponent(qr);
 }
+
+/* Upload Logo */
+document.getElementById("logoInput").addEventListener("change", function(e){
+    let reader = new FileReader();
+    reader.onload = function(){
+        document.getElementById("previewLogo").src = reader.result;
+    }
+    reader.readAsDataURL(e.target.files[0]);
+});
+
 </script>
 
 </body>
