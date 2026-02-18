@@ -2,12 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Kartu Nama Generator</title>
+<title>Kartu Nama Modern</title>
 
 <style>
 body{
-    font-family: Arial, sans-serif;
-    background:#f2f2f2;
+    font-family: 'Segoe UI', sans-serif;
+    background:#eaeaea;
     padding:20px;
 }
 
@@ -16,57 +16,84 @@ body{
     background:#ffffff;
     padding:15px;
     margin-bottom:20px;
-    border:1px solid #ccc;
-    width:400px;
+    border-radius:8px;
+    width:420px;
+    box-shadow:0 5px 15px rgba(0,0,0,0.1);
 }
 
 .form-box input{
     width:100%;
-    padding:6px;
-    margin-bottom:8px;
+    padding:8px;
+    margin-bottom:10px;
+    border-radius:6px;
+    border:1px solid #ccc;
 }
 
 button{
-    padding:8px 12px;
+    padding:8px 14px;
+    border:none;
+    border-radius:6px;
     cursor:pointer;
+    font-weight:bold;
+}
+
+.update-btn{
+    background:#111;
+    color:white;
+}
+
+.print-btn{
+    background:#007bff;
+    color:white;
 }
 
 /* ===== KARTU ===== */
 .card{
     width:90mm;
     height:55mm;
-    background:#ffffff;
-    border:2px solid #000;
-    padding:10px;
+    padding:12px;
     box-sizing:border-box;
     display:flex;
     justify-content:space-between;
+    border-radius:12px;
+    color:white;
+
+    background: linear-gradient(135deg, #1c1c1c, #000000);
+    box-shadow:0 10px 25px rgba(0,0,0,0.3);
 }
 
 .left{
-    width:60%;
+    width:65%;
 }
 
 .logo{
     font-size:20px;
-    font-weight:bold;
+    font-weight:700;
+    letter-spacing:1px;
 }
 
 .subtitle{
     font-size:11px;
-    margin-bottom:6px;
+    opacity:0.8;
+    margin-bottom:8px;
 }
 
 .info{
     font-size:10px;
-    margin-bottom:3px;
+    margin-bottom:4px;
 }
 
 .qr{
-    width:35%;
+    width:30%;
     display:flex;
     justify-content:center;
     align-items:center;
+}
+
+.qr img{
+    background:white;
+    padding:4px;
+    border-radius:8px;
 }
 
 /* PRINT */
@@ -88,6 +115,7 @@ button{
         position:absolute;
         left:0;
         top:0;
+        box-shadow:none;
     }
 }
 </style>
@@ -95,21 +123,21 @@ button{
 
 <body>
 
-<h2>Generator Kartu Nama</h2>
+<h2>Generator Kartu Nama Modern</h2>
 
 <div class="form-box">
-    <input type="text" id="namaToko" placeholder="Nama Toko" value="TOKO ZIZAN">
-    <input type="text" id="subtitle" placeholder="Subtitle" value="Toko Online & Retail Modern">
-    <input type="text" id="alamat" placeholder="Alamat" value="Jl. Contoh No.123, Taipei">
-    <input type="text" id="hp" placeholder="Nomor HP" value="0912-345-678">
-    <input type="text" id="email" placeholder="Email" value="tokozizan@email.com">
-    <input type="text" id="qrLink" placeholder="Link QR (https://...)" value="https://tokozizan.com">
+    <input type="text" id="namaToko" value="TOKO ZIZAN">
+    <input type="text" id="subtitle" value="Toko Online & Retail Modern">
+    <input type="text" id="alamat" value="Jl. Contoh No.123, Taipei">
+    <input type="text" id="hp" value="0912-345-678">
+    <input type="text" id="email" value="tokozizan@email.com">
+    <input type="text" id="qrLink" value="https://tokozizan.com">
 
-    <button onclick="updateCard()">Update Kartu</button>
-    <button onclick="window.print()">Print</button>
+    <button class="update-btn" onclick="updateCard()">Update</button>
+    <button class="print-btn" onclick="window.print()">Print</button>
 </div>
 
-<div class="card" id="cardArea">
+<div class="card">
 
     <div class="left">
         <div class="logo" id="previewNama">TOKO ZIZAN</div>
@@ -123,7 +151,7 @@ button{
     <div class="qr">
         <img id="previewQR"
         src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://tokozizan.com"
-        width="90">
+        width="85">
     </div>
 
 </div>
